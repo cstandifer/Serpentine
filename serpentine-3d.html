@@ -857,8 +857,10 @@ function update(dt){
     // starting a turn still plays the next note of the melody, like the original
     if (Math.abs(G.turn) > 0.35 && (Math.abs(G.prevTurn) <= 0.35 || Math.sign(G.turn) !== Math.sign(G.prevTurn)) && G.turnCue <= 0){ sfxTurn(); buzz(6); G.turnCue = 0.3; }
     G.prevTurn = G.turn;
-    let remain = G.speed*dt;
-    while (remain > 0 && state === 'play' && p.alive){ const d = Math.min(0.08, remain); remain -= d; step(d, d/G.speed); }
+    // the computer opponent can be set to move slower than you
+    const sp = G.speed*(isCPU(p.i) ? aiSkill().speed : 1);
+    let remain = sp*dt;
+    while (remain > 0 && state === 'play' && p.alive){ const d = Math.min(0.08, remain); remain -= d; step(d, d/sp); }
     save(p);
   }
   load(PL[0]);
@@ -868,11 +870,20 @@ function update(dt){
   }
 }
 // ---- computer opponent (versus) ----
-// Every few hundredths of a second it picks the nearest gem (favoring ones ahead), fans out nine
+// A few times a second it picks a gem to chase (usually a near one, favoring ones ahead), fans out nine
 // feelers in front of it, and steers along the one that's both clear and closest to the gem.
-// Hurdles dead ahead get jumped. Difficulty changes how far it looks, how fast it reacts and how sloppy it is.
+// Hurdles dead ahead get jumped, if it doesn't fumble. Difficulty sets how good it is:
+//   speed  how fast it moves compared to you      look   how far ahead it checks for trouble
+//   think  seconds between decisions (reaction)   wobble how sloppy its choices are
+//   steer  how hard it's willing to turn          jump   chance it makes a jump it should
+//   greed  chance it goes for the best gem rather than one of the next few
 const isCPU = i => MODE === 2 && OPP === 'cpu' && i === 1;
-const AI_SKILL = {easy: {look: 2.2, think: 0.22, wobble: 0.5}, normal: {look: 3, think: 0.13, wobble: 0.25}, hard: {look: 3.8, think: 0.07, wobble: 0.08}};
+const AI_SKILL = {
+  easy:   {speed: 0.8,  look: 1.6, think: 0.35, wobble: 1.2,  steer: 0.6,  jump: 0.5,  greed: 0.45},
+  normal: {speed: 0.9,  look: 2.4, think: 0.2,  wobble: 0.6,  steer: 0.8,  jump: 0.8,  greed: 0.75},
+  hard:   {speed: 1,    look: 3.6, think: 0.08, wobble: 0.12, steer: 1,    jump: 0.97, greed: 1}
+};
+const aiSkill = () => AI_SKILL[RUN.diff] || AI_SKILL.normal;
 function aiNear(x, y, fn){
   const cx = Math.floor(x/CH), cy = Math.floor(y/CH);
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) if (fn(ensureChunk(cx + i, cy + j))) return true;
@@ -899,14 +910,22 @@ function aiBlocked(x, y, self){
 }
 function aiThink(p, dt){
   if ((p.aiT = (p.aiT || 0) - dt) > 0) return;
-  const sk = AI_SKILL[RUN.diff] || AI_SKILL.normal;
-  p.aiT = sk.think;
-  let tgt = G.th, best = Infinity;
-  for (const c of G.chunks.values()) for (const g of c.gems){
-    if (g.taken) continue;
-    const a = Math.atan2(g.y - G.y, g.x - G.x), d = Math.hypot(g.x - G.x, g.y - G.y)*(1.5 - 0.5*Math.cos(angDiff(a, G.th)));
-    if (d < best){ best = d; tgt = a; }
+  const sk = aiSkill();
+  p.aiT = sk.think*(0.7 + Math.random()*0.6);
+  // stick with the gem it's chasing; when that's gone, rank gems by distance (cheaper if they're ahead)
+  if (!p.aiGem || p.aiGem.taken){
+    const ranked = [];
+    for (const c of G.chunks.values()) for (const g of c.gems){
+      if (g.taken) continue;
+      const a = Math.atan2(g.y - G.y, g.x - G.x);
+      ranked.push({g, d: Math.hypot(g.x - G.x, g.y - G.y)*(1.5 - 0.5*Math.cos(angDiff(a, G.th)))});
+    }
+    ranked.sort((a, b) => a.d - b.d);
+    // a greedy computer takes the best one; a lazier one settles for one of the next few
+    const pickI = Math.random() < sk.greed ? 0 : Math.floor(Math.random()*Math.min(4, ranked.length));
+    p.aiGem = ranked.length ? ranked[pickI].g : null;
   }
+  const tgt = p.aiGem ? Math.atan2(p.aiGem.y - G.y, p.aiGem.x - G.x) : G.th;
   const L = sk.look + G.speed*0.25;
   let pick = G.th, top = -Infinity;
   for (let k = -4; k <= 4; k++){
@@ -916,11 +935,15 @@ function aiThink(p, dt){
     const score = free/L*4 - Math.abs(angDiff(a, tgt))*0.9 - Math.abs(k)*0.08 + (Math.random() - 0.5)*sk.wobble;
     if (score > top){ top = score; pick = a; }
   }
-  p.aiSteer = clamp1(angDiff(pick, G.th)*2.2);
-  if (!G.air){
+  p.aiSteer = clamp1(angDiff(pick, G.th)*2.2)*sk.steer;
+  if (!G.air && G.t >= (p.aiNoJump || 0)){
     for (let s = 0.35; s <= 0.9 + G.speed*0.08; s += 0.2){
       const x = G.x + Math.cos(G.th)*s, y = G.y + Math.sin(G.th)*s;
-      if (aiNear(x, y, c => c.obs.some(o => !o.tall && circleRect(x, y, 0.2, o)))){ jump(); break; }
+      if (aiNear(x, y, c => c.obs.some(o => !o.tall && circleRect(x, y, 0.2, o)))){
+        // roll once per hurdle: either it jumps, or it fumbles and doesn't try again for a moment
+        if (Math.random() < sk.jump) jump(); else p.aiNoJump = G.t + 0.8;
+        break;
+      }
     }
   }
 }
@@ -999,7 +1022,7 @@ function respawn(p){
     for (let k = -1; k <= 3 && !bad; k++) bad = blocked(x + Math.cos(th)*k, y + Math.sin(th)*k);
     if (bad) continue;
     Object.assign(p, {x, y, th, turn: 0, prevTurn: 0, aim: null, sinceP: 0, air: false, airT: 0, jumpBuf: 0, tailLen: 7,
-      trail: [{x: x - Math.cos(th)*1.5, y: y - Math.sin(th)*1.5, air: false}], cam: {x, y}, alive: true, grace: 1.2});
+      trail: [{x: x - Math.cos(th)*1.5, y: y - Math.sin(th)*1.5, air: false}], cam: {x, y}, alive: true, grace: 1.2, aiGem: null});
     if (R3) R3.snap(p.i);
     phoneSend({t: 'buzz', p: [15, 40, 15]}, p.i);
     return;
