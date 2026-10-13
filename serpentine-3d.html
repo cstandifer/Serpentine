@@ -32,6 +32,8 @@ body{margin:0;font-size:14px}
   --glider-side:#9a82d6;
   --magnet:#d6f25c;
   --magnet-side:#7f9a22;
+  --comet:#ff7a59;
+  --comet-side:#a83a22;
   --hurdle:#4fd1c5;
   --hurdle-side:#23847c;
   --pillar:#ff5c8a;
@@ -55,6 +57,25 @@ button{touch-action:manipulation}
 #world{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 #world[hidden]{display:none}
 .vig{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(10,6,20,0) 45%,rgba(10,6,20,.55))}
+/* 2-player: shared minimap sits bottom-center, a divider splits the two views, each half gets its own HUD */
+#stage.mini.duo{right:auto;left:50%;transform:translateX(-50%)}
+.split{position:fixed;top:0;bottom:0;left:50%;width:4px;transform:translateX(-50%);background:var(--night);pointer-events:none}
+.duo{position:fixed;inset:0;pointer-events:none}
+.duo-p{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);display:flex;align-items:center;gap:10px}
+#duo0{left:16px}#duo1{left:calc(50% + 64px)}
+.duo-p .tag{font-family:var(--display);font-size:.9rem;color:var(--night);padding:5px 9px;border-radius:9px}
+.duo-p .sc{font-family:var(--display);font-size:2rem;line-height:1;font-variant-numeric:tabular-nums;text-shadow:0 3px 0 rgba(0,0,0,.35)}
+.duo-p .hearts{display:flex;gap:3px}.duo-p .hearts svg{width:15px;height:15px}
+.duo-p .hearts .on{fill:var(--pillar)}.duo-p .hearts .off{fill:none;stroke:var(--muted);stroke-width:1.6;opacity:.6}
+.duo-t{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px);left:50%;transform:translateX(-50%);font-family:var(--display);font-size:1.5rem;padding:6px 14px;border-radius:12px;background:var(--panel);border:1px solid var(--rule);font-variant-numeric:tabular-nums}
+.duo-t.hurry{color:var(--pillar)}
+.duo-msg{position:absolute;top:44%;transform:translateX(-50%);font-family:var(--display);font-size:clamp(1.4rem,3vw,2.4rem);text-shadow:0 4px 0 rgba(0,0,0,.4)}
+#duoMsg0{left:25%}#duoMsg1{left:75%}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.vs-p{padding:14px;border-radius:14px;border:1px solid var(--rule);background:rgba(246,239,253,.04);display:grid;gap:4px}
+.vs-p .v{font-family:var(--display);font-size:2rem;line-height:1;font-variant-numeric:tabular-nums}
+.vs-p small{color:var(--muted);font-weight:600}
+.vs-p.win{border-color:currentColor}
 #stage.mini{inset:auto;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);border-radius:16px;border:1px solid var(--rule);box-shadow:0 12px 30px rgba(0,0,0,.45);cursor:default}
 .chip{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:5px 10px;border-radius:999px;font-size:.68rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;background:var(--panel);border:1px solid var(--rule);color:var(--muted)}
 .chip i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
@@ -74,7 +95,7 @@ button{touch-action:manipulation}
 .goal{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.72rem;font-weight:800;letter-spacing:.06em;color:var(--gem);font-variant-numeric:tabular-nums}
 .goal-bar{width:96px;height:6px;border-radius:3px;background:rgba(246,239,253,.12);overflow:hidden}
 .goal-bar i{display:block;height:100%;width:0;background:var(--gem);transition:width .2s}
-.hud-btns{display:flex;gap:8px;pointer-events:auto}
+.hud-btns{display:flex;gap:8px;pointer-events:auto;margin-left:auto}
 .icon-btn{width:44px;height:44px;display:grid;place-items:center;border-radius:12px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer;padding:0}
 .icon-btn svg{width:20px;height:20px}
 .icon-btn:focus-visible,.btn:focus-visible,.how summary:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
@@ -159,8 +180,15 @@ button{touch-action:manipulation}
 <div class="vig" id="vig" hidden></div>
 <canvas id="stage" aria-label="Serpentine map"></canvas>
 
+<div class="split" id="split" hidden></div>
+<div class="duo" id="duo" hidden>
+  <div class="duo-p" id="duo0"><span class="tag" id="duoTag0">P1</span><span class="sc">0</span><span class="hearts"></span></div>
+  <div class="duo-t" id="duoT">1:00</div>
+  <div class="duo-p" id="duo1"><span class="tag" id="duoTag1">P2</span><span class="sc">0</span><span class="hearts"></span></div>
+  <div class="duo-msg" id="duoMsg0"></div><div class="duo-msg" id="duoMsg1"></div>
+</div>
 <div class="hud">
-  <div>
+  <div id="hudMain">
     <div class="score" id="score">0</div>
     <div class="sub" id="sub">Level 1</div>
     <div class="goal"><div class="goal-bar"><i id="goalFill"></i></div><span id="goalTxt">0/12 gems</span></div>
@@ -201,13 +229,18 @@ button{touch-action:manipulation}
       <div id="menuBoard"></div>
     </details>
     <div class="pick">
+      <div class="eyebrow" id="modeLabel">Players</div>
+      <div class="seg" style="--n:2" role="radiogroup" aria-labelledby="modeLabel" id="modePick"></div>
+      <div class="desc" id="modeDesc"></div>
+    </div>
+    <div class="pick">
       <div class="eyebrow" id="stageLabel">Level</div>
       <div class="seg" style="--n:5" role="radiogroup" aria-labelledby="stageLabel" id="stagePick"></div>
       <div class="desc" id="stageDesc"></div>
     </div>
     <div class="pick">
       <div class="eyebrow" id="snakeLabel">Snake</div>
-      <div class="seg" style="--n:3" role="radiogroup" aria-labelledby="snakeLabel" id="snakePick"></div>
+      <div class="seg" style="--n:4" role="radiogroup" aria-labelledby="snakeLabel" id="snakePick"></div>
       <div class="desc" id="snakeDesc"></div>
     </div>
     <div class="pick">
@@ -290,6 +323,23 @@ button{touch-action:manipulation}
   </div>
 </div>
 
+<div class="overlay" id="duel" hidden>
+  <div class="card">
+    <div style="display:grid;gap:8px">
+      <div class="eyebrow" id="duelEyebrow">Time's up</div>
+      <h1 class="title" id="duelTitle">Player 1 wins</h1>
+    </div>
+    <div class="vs">
+      <div class="vs-p" id="vs0"><div class="eyebrow">Player 1</div><div class="v">0</div><small>0 gems</small></div>
+      <div class="vs-p" id="vs1"><div class="eyebrow">Player 2</div><div class="v">0</div><small>0 gems</small></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="rematchBtn">Rematch</button>
+      <button class="btn btn-ghost" id="duelMenuBtn">Change level or snake</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="pause" hidden>
   <div class="card">
     <div>
@@ -348,7 +398,9 @@ const SNAKES = {
   glider:  {name: 'Glider',  desc: 'Jumps twice as far and sails over pillars too, but grows faster.',
             jump: 2, grow: 1.4, magnet: 0, overPillars: true, shape: 'arrow'},
   magnet:  {name: 'Magnet',  desc: 'Pulls in nearby gems, then needs 3 seconds to recharge. Its jumps are shorter.',
-            jump: 0.75, grow: 1, magnet: 2.4, recharge: 3, overPillars: false, shape: 'round'}
+            jump: 0.75, grow: 1, magnet: 2.4, recharge: 3, overPillars: false, shape: 'round'},
+  comet:   {name: 'Comet',   desc: 'The fastest snake, about 25% quicker. The catch: it needs more room to turn.',
+            jump: 1, grow: 1, magnet: 0, overPillars: false, shape: 'comet', speed: 1.25, turnR: 1.45}
 };
 for (const k in SNAKES){ SNAKES[k].color = tok(k); SNAKES[k].side = tok(k + '-side'); }
 
@@ -400,13 +452,20 @@ const VIEWS = {
   top:   {name: 'Top',   desc: 'The original top-down board. Arrow keys steer by compass direction.'}
 };
 let view = VIEWS[store.get('view')] ? store.get('view') : 'eye';
+let MODE = +store.get('players') === 2 ? 2 : 1;   // 1 = solo, 2 = versus
+let ARENA = null, WALLS = [];
 
 // ---- screen ----
 let W = 0, H = 0, DPR = 1, SCALE = 40;
 function resize(){
   DPR = Math.min(2, window.devicePixelRatio || 1);
   const mini = view !== 'top';
-  if (mini){
+  cvs.classList.toggle('duo', mini && MODE === 2);
+  if (mini && MODE === 2 && ARENA){
+    // versus: one map of the whole arena, centered between the two views
+    W = H = Math.round(Math.max(150, Math.min(240, Math.min(innerWidth, innerHeight)*0.3)));
+    SCALE = W/(ARENA.x1 - ARENA.x0 + 3);
+  } else if (mini){
     // in the 3D views this canvas becomes a small top-down map in the corner
     W = H = Math.round(Math.max(140, Math.min(260, Math.min(innerWidth, innerHeight)*0.28)));
     SCALE = W/15;
@@ -435,16 +494,12 @@ function makeGlow(hexColor){
 const GLOW_GEM = makeGlow(C.gem);
 let RIB = [], RIB_RGB = [255,255,255], GLOW_RIB = null;
 const ribA = a => `rgba(${RIB_RGB.join(',')},${a})`;
-function applyLook(S, K){
+function applyLook(S){
   C['tile-a'] = S.tiles[0]; C['tile-b'] = S.tiles[1]; C.void = S.void; C.wall = S.wall[0]; C['wall-side'] = S.wall[1];
-  C.ribbon = K.color; C['ribbon-side'] = K.side;
-  RIB_RGB = rgb(K.color);
-  const base = rgb(S.tiles[0]);
-  RIB = Array.from({length: 20}, (_, i) => mix(base, RIB_RGB, 0.42 + 0.58*(i/19)));
-  GLOW_RIB = makeGlow(K.color);
 }
 
-const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch(_) {} phoneSend({t: 'buzz', p}); };
+// haptics go to the phone of whichever snake the event happened to (in solo, to every phone)
+const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch(_) {} phoneSend({t: 'buzz', p}, MODE === 2 && CUR ? CUR.i : undefined); };
 let wake = null;
 async function keepAwake(on){
   try {
@@ -457,7 +512,6 @@ async function keepAwake(on){
 function mulberry(a){ return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a>>>15, 1|a); t = t + Math.imul(t ^ t>>>7, 61|t) ^ t; return ((t ^ t>>>14)>>>0) / 4294967296; }; }
 function hash(x,y,s){ let h = s ^ Math.imul(x,374761393) ^ Math.imul(y,668265263); h = Math.imul(h ^ h>>>13, 1274126177); return h ^ h>>>16; }
 
-let ARENA, WALLS;
 function buildArena(half){
   ARENA = {x0: -half, y0: -half, x1: half, y1: half};
   WALLS = [
@@ -477,22 +531,52 @@ let G, RUN, state = 'menu';
 const LIVES = 3;
 const newRunState = () => ({diff, snake, banked: 0, gems: 0, won: false, lastBonus: 0, lives: LIVES});
 
+// ---- players ----
+// MODE 1 is the solo game; MODE 2 puts two snakes in one arena for a 60-second versus round.
+// Each snake's own state lives in a player object, and the shared world (level, gems, speed, clock) lives in G.
+// The movement, collision and drawing code all work on G, so load() copies one player's fields into G
+// (plus its colors) and save() copies them back. In solo there's just one player and it's always loaded.
+const DUEL_TIME = 60;
+const SNAKE_FIELDS = ['x','y','th','turn','prevTurn','turnCue','aim','sinceP','trail','air','airT','airDur','jumpBuf','tailLen','dist','gems','magCool','cam','flash','noteI'];
+let PL = [], CUR = null;
+function lookFor(S, color, side){
+  const c = rgb(color), base = rgb(S.tiles[0]);
+  return {color, side, ribRGB: c, glow: makeGlow(color), rib: Array.from({length: 20}, (_, i) => mix(base, c, 0.42 + 0.58*(i/19)))};
+}
+// player 2 gets its own color so the two snakes never look alike
+const P2_COLORS = K => K === SNAKES.magnet ? ['#ffb547', '#c56f1c'] : ['#d6f25c', '#7f9a22'];
+function newPlayer(i, y, look){
+  return {i, look, x: 0.5, y, th: 0, turn: 0, prevTurn: 0, turnCue: 0, aim: null, sinceP: 0,
+    trail: [{x: -6.5, y, air: false}], air: false, airT: 0, airDur: 1, jumpBuf: 0, tailLen: 7, dist: 0, gems: 0,
+    magCool: 0, cam: {x: 3.5, y}, flash: 0, noteI: 0, lives: LIVES, alive: true, respawnT: 0, grace: 0, cause: ''};
+}
+function load(p){
+  for (const k of SNAKE_FIELDS) G[k] = p[k];
+  CUR = p;
+  const L = p.look; C.ribbon = L.color; C['ribbon-side'] = L.side; RIB = L.rib; RIB_RGB = L.ribRGB; GLOW_RIB = L.glow;
+}
+function save(p){ for (const k of SNAKE_FIELDS) p[k] = G[k]; }
+const pScore = p => Math.floor(p.dist) + p.gems*10;
+
 function loadStage(idx){
   const S = STAGES[idx], D = DIFFS[RUN.diff], K = SNAKES[RUN.snake];
-  applyLook(S, K);
+  applyLook(S);
   buildArena(Math.max(15, S.half + D.room));
-  const base = D.speed + idx*0.25;
+  const sp = K.speed || 1, base = (D.speed + idx*0.25)*sp;
   G = {
     idx, S, D, K,
     seed: (Math.random()*1e9)|0, chunks: new Map(), walls: [],
-    x: 0.5, y: 0.5, th: 0, turn: 0, prevTurn: 0, turnCue: 0, aim: null, sinceP: 0, trail: [], air: false, airT: 0, airDur: 1, jumpBuf: 0,
-    tailLen: 7, base, speed: base, max: D.max + idx*0.3,
-    t: 0, dist: 0, gems: 0, done: false, clearT: 0, magCool: 0,
-    cam: {x: 3.5, y: 0.5}, particles: [], shake: 0, deadT: 0, cause: '', noteI: 0, flash: 0
+    base, speed: base, max: (D.max + idx*0.3)*sp,
+    t: 0, done: false, clearT: 0, left: DUEL_TIME,
+    particles: [], shake: 0, deadT: 0, cause: ''
   };
   G.walls = S.walls.map(clipWall).filter(Boolean);
-  G.trail.push({x: -6.5, y: 0.5, air: false});
-  if (idx === 0) addThing('obs', {x: 10.2, y: -1, w: 0.6, h: 3, tall: false}); // teaches the jump
+  // solo starts on the center line; versus starts side by side, both facing the same way
+  PL = MODE === 2
+    ? [newPlayer(0, -1.5, lookFor(S, K.color, K.side)), newPlayer(1, 2.5, lookFor(S, ...P2_COLORS(K)))]
+    : [newPlayer(0, 0.5, lookFor(S, K.color, K.side))];
+  load(PL[0]);
+  if (idx === 0 && MODE === 1) addThing('obs', {x: 10.2, y: -1, w: 0.6, h: 3, tall: false}); // teaches the jump
   addThing('gems', {x: 6.5, y: 0.5, taken: false});
   // the field is finite, so build all of it up front and count its gems
   for (let cx = Math.floor(ARENA.x0/CH); cx <= Math.floor((ARENA.x1 - 1)/CH); cx++)
@@ -500,6 +584,7 @@ function loadStage(idx){
   G.gemsLeft = 0;
   for (const c of G.chunks.values()) G.gemsLeft += c.gems.length;
   if (R3) R3.build();
+  if (MODE === 2) resize();
 }
 const overlaps = (a, b, pad) => a.x - pad < b.x + b.w && a.x + a.w + pad > b.x && a.y - pad < b.y + b.h && a.y + a.h + pad > b.y;
 function addThing(kind, o){
@@ -580,15 +665,17 @@ function pushPoint(){
 // Steering is analog: -1 is a hard left, +1 a hard right, 0 straight, relative to where the snake faces.
 // It comes from the phone's tilt, held arrow keys, or a sideways drag. In the top view, arrow keys and
 // drags instead point the snake at a compass heading (G.aim) and it curves round to face it.
-const STEER = {keyL: false, keyR: false, drag: 0, phone: 0, phoneAt: -1e9};
+const STEERS = [0, 1].map(() => ({keyL: false, keyR: false, drag: 0, phone: 0, phoneAt: -1e9}));
+const STEER = STEERS[0];   // solo controls (and player 1's)
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const clamp1 = v => Math.max(-1, Math.min(1, v));
 function aimAt(angle){ if (state === 'play') G.aim = angle; }
-function steerTarget(){
-  if (performance.now() - STEER.phoneAt < 450 && Math.abs(STEER.phone) > 0.01){ G.aim = null; return STEER.phone; }
-  const k = (STEER.keyR ? 1 : 0) - (STEER.keyL ? 1 : 0);
+function steerTarget(i){
+  const st = STEERS[i] || STEER;
+  if (performance.now() - st.phoneAt < 450 && Math.abs(st.phone) > 0.01){ G.aim = null; return st.phone; }
+  const k = (st.keyR ? 1 : 0) - (st.keyL ? 1 : 0);
   if (k){ G.aim = null; return k; }
-  if (STEER.drag){ G.aim = null; return STEER.drag; }
+  if (st.drag){ G.aim = null; return st.drag; }
   if (G.aim !== null){
     const d = angDiff(G.aim, G.th);
     if (Math.abs(d) < 0.02){ G.th = G.aim; G.aim = null; G.turn = 0; return 0; }
@@ -601,6 +688,12 @@ function jump(){
   if (G.air) { G.jumpBuf = 0.14; return; }
   G.air = true; G.airT = 0; G.airDur = G.D.jump*G.K.jump / G.speed; G.jumpBuf = 0;
   pushPoint(); sfxJump(); buzz(12);
+}
+// jump for one player (loads that snake, jumps, stores it back)
+function jumpFor(i){
+  const p = PL[i];
+  if (!p || state !== 'play' || !p.alive) return;
+  load(p); jump(); save(p); load(PL[0]);
 }
 function trim(){
   const T = G.trail;
@@ -650,7 +743,21 @@ function collide(){
     for (const g of c.gems)
       if (!g.taken && state === 'play' && Math.hypot(g.x-G.x, g.y-G.y) < 0.62) eat(g);
   });
-  if (state === 'play' && !G.air && hitsTail()) die('tail');
+  if (MODE === 2 && state === 'play' && CUR.alive && !G.air && CUR.grace <= 0) for (const q of PL){
+    if (q === CUR || !q.alive) continue;
+    // head to head knocks out both; hitting the other snake's body only knocks out you
+    if (!q.air && q.grace <= 0 && Math.hypot(q.x - G.x, q.y - G.y) < 0.45){ dieP(q, 'head'); return die('head'); }
+    if (hitsBody(q)) return die('snake');
+  }
+  if (state === 'play' && CUR.alive && !G.air && hitsTail()) die('tail');
+}
+function hitsBody(q){
+  const T = q.trail;
+  for (let i = 0; i < T.length; i++){
+    const a = T[i], b = T[i+1] || q;
+    if (!a.air && distSeg(G.x, G.y, a.x, a.y, b.x, b.y) < HIT_TAIL + 0.04) return true;
+  }
+  return false;
 }
 function pullGems(dt){
   if (G.magCool > 0) return;
@@ -665,7 +772,7 @@ function pullGems(dt){
 }
 function step(d, dt){
   // turn rate scales with speed so the tightest curve keeps the same radius as you speed up
-  G.th += Math.min(TURN_MAX, G.speed/TURN_R)*G.turn*dt;
+  G.th += Math.min(TURN_MAX, G.speed/(TURN_R*(G.K.turnR || 1)))*G.turn*dt;
   G.x += Math.cos(G.th)*d; G.y += Math.sin(G.th)*d; G.dist += d;
   G.sinceP += d;
   if (G.sinceP >= PT_GAP && Math.abs(G.turn) > 0.01) pushPoint();
@@ -683,16 +790,70 @@ function step(d, dt){
 function update(dt){
   G.t += dt;
   G.speed = Math.min(G.max, G.base + G.t*G.D.ramp);
-  if (G.magCool > 0 && (G.magCool -= dt) <= 0) sfxRecharged();
-  if (G.K.magnet) pullGems(dt);
-  // ease toward the requested steering so sensor jitter doesn't twitch the snake
-  G.turn += (steerTarget() - G.turn)*(1 - Math.exp(-dt*12));
-  G.turnCue -= dt;
-  // starting a turn still plays the next note of the melody, like the original
-  if (Math.abs(G.turn) > 0.35 && (Math.abs(G.prevTurn) <= 0.35 || Math.sign(G.turn) !== Math.sign(G.prevTurn)) && G.turnCue <= 0){ sfxTurn(); buzz(6); G.turnCue = 0.3; }
-  G.prevTurn = G.turn;
-  let remain = G.speed*dt;
-  while (remain > 0 && state === 'play'){ const d = Math.min(0.08, remain); remain -= d; step(d, d/G.speed); }
+  for (const p of PL){
+    if (!p.alive){ if (MODE === 2 && p.lives > 0 && (p.respawnT -= dt) <= 0) respawn(p); continue; }
+    load(p);
+    if (p.grace > 0) p.grace -= dt;
+    if (G.magCool > 0 && (G.magCool -= dt) <= 0) sfxRecharged();
+    if (G.K.magnet) pullGems(dt);
+    // ease toward the requested steering so sensor jitter doesn't twitch the snake
+    G.turn += (steerTarget(p.i) - G.turn)*(1 - Math.exp(-dt*12));
+    G.turnCue -= dt;
+    // starting a turn still plays the next note of the melody, like the original
+    if (Math.abs(G.turn) > 0.35 && (Math.abs(G.prevTurn) <= 0.35 || Math.sign(G.turn) !== Math.sign(G.prevTurn)) && G.turnCue <= 0){ sfxTurn(); buzz(6); G.turnCue = 0.3; }
+    G.prevTurn = G.turn;
+    let remain = G.speed*dt;
+    while (remain > 0 && state === 'play' && p.alive){ const d = Math.min(0.08, remain); remain -= d; step(d, d/G.speed); }
+    save(p);
+  }
+  load(PL[0]);
+  if (MODE === 2 && state === 'play'){
+    G.left -= dt;
+    if (G.left <= 0 || PL.every(p => !p.alive && p.lives <= 0)) endDuel();
+  }
+}
+// versus: a crash costs a life and the snake reappears somewhere clear a moment later
+function dieP(p, cause){
+  if (!p.alive) return;
+  const cur = p === CUR, x = cur ? G.x : p.x, y = cur ? G.y : p.y;
+  p.alive = false; p.lives--; p.cause = cause; p.respawnT = 1.4;
+  burst(x, y, p.look.color, 26, 6); burst(x, y, C.pillar, 10, 5);
+  G.shake = Math.max(G.shake, 0.35); sfxCrash();
+  phoneSend({t: 'buzz', p: [40, 30, 70]}, p.i);
+}
+function respawn(p){
+  const cx = (ARENA.x0 + ARENA.x1)/2, cy = (ARENA.y0 + ARENA.y1)/2;
+  const blocked = (px, py) => {
+    if (px < ARENA.x0 + 2 || px > ARENA.x1 - 2 || py < ARENA.y0 + 2 || py > ARENA.y1 - 2) return true;
+    if (G.walls.some(w => circleRect(px, py, 0.9, w))) return true;
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++)
+      if (ensureChunk(Math.floor(px/CH) + i, Math.floor(py/CH) + j).obs.some(o => circleRect(px, py, 0.9, o))) return true;
+    for (const q of PL){
+      if (q === p || !q.alive) continue;
+      if (Math.hypot(q.x - px, q.y - py) < 4) return true;
+      for (let i = 0; i < q.trail.length; i++){ const a = q.trail[i], b = q.trail[i+1] || q; if (distSeg(px, py, a.x, a.y, b.x, b.y) < 1.5) return true; }
+    }
+    return false;
+  };
+  for (let tries = 0; tries < 200; tries++){
+    const x = ARENA.x0 + 3 + Math.random()*(ARENA.x1 - ARENA.x0 - 6), y = ARENA.y0 + 3 + Math.random()*(ARENA.y1 - ARENA.y0 - 6);
+    const th = Math.atan2(cy - y, cx - x);   // face the middle of the arena
+    let bad = false;
+    for (let k = -1; k <= 3 && !bad; k++) bad = blocked(x + Math.cos(th)*k, y + Math.sin(th)*k);
+    if (bad) continue;
+    Object.assign(p, {x, y, th, turn: 0, prevTurn: 0, aim: null, sinceP: 0, air: false, airT: 0, jumpBuf: 0, tailLen: 7,
+      trail: [{x: x - Math.cos(th)*1.5, y: y - Math.sin(th)*1.5, air: false}], cam: {x, y}, alive: true, grace: 1.2});
+    if (R3) R3.snap(p.i);
+    phoneSend({t: 'buzz', p: [15, 40, 15]}, p.i);
+    return;
+  }
+  p.respawnT = 0.3; // nowhere clear right now; try again in a moment
+}
+function endDuel(){
+  state = 'over'; G.done = true;
+  stopMusic(); sfxClear(); keepAwake(false);
+  $('pauseBtn').hidden = true;
+  showDuel();
 }
 function eat(g){
   g.taken = true; G.gems++; G.tailLen += G.D.grow*G.K.grow; G.flash = 1;
@@ -700,11 +861,12 @@ function eat(g){
   G.gemsLeft--;
   while (G.gemsLeft < MIN_GEMS && spawnGem()) G.gemsLeft++;
   burst(g.x, g.y, C.gem, 14, 4); sfxGem(); buzz(18);
-  if (G.gems >= G.S.goal) stageClear();
+  if (MODE === 1 && G.gems >= G.S.goal) stageClear();
 }
 const score = () => RUN.banked + (G.done ? 0 : Math.floor(G.dist) + G.gems*10);
 function die(cause){
   if (state !== 'play') return;
+  if (MODE === 2) return dieP(CUR, cause);
   state = 'dying'; G.cause = cause; G.deadT = 0; G.shake = 0.6;
   burst(G.x, G.y, C.ribbon, 26, 6); burst(G.x, G.y, C.pillar, 10, 5);
   RUN.lives--;
@@ -887,7 +1049,9 @@ function setMuted(m){
 }
 
 // ---- rendering ----
-const w2s = (x, y) => [(x - G.cam.x)*SCALE + W/2, (y - G.cam.y)*SCALE + H/2];
+// RCAM is the map camera: following the snake in solo, fixed on the whole arena in versus
+let RCAM = {x: 0, y: 0};
+const w2s = (x, y) => [(x - RCAM.x)*SCALE + W/2, (y - RCAM.y)*SCALE + H/2];
 function rectW(x, y, w, h, lift){ const [sx, sy] = w2s(x, y); ctx.fillRect(sx, sy - lift, w*SCALE, h*SCALE); }
 
 function drawRibbon(){
@@ -937,7 +1101,7 @@ function drawBlock(o){
     // stone joints every cell, only where they're on screen
     ctx.fillStyle = C['wall-side'];
     const j = Math.max(1, S*0.05), vert = o.h > o.w;
-    const k0 = Math.max(0, Math.floor(vert ? (G.cam.y - o.y) - H/2/S - 2 : (G.cam.x - o.x) - W/2/S - 2));
+    const k0 = Math.max(0, Math.floor(vert ? (RCAM.y - o.y) - H/2/S - 2 : (RCAM.x - o.x) - W/2/S - 2));
     const k1 = Math.min(vert ? o.h : o.w, k0 + Math.ceil((vert ? H : W)/S) + 4);
     for (let k = k0; k <= k1; k++){
       if (vert) ctx.fillRect(sx, sy - h + k*S, sw, j);
@@ -978,6 +1142,7 @@ function headPath(cx, cy, size, shape){
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
     ctx.closePath();
   } else if (shape === 'round') ctx.arc(cx, cy, size*0.56, 0, Math.PI*2);
+  else if (shape === 'comet') ctx.ellipse(cx, cy, size*0.7, size*0.42, G.th, 0, Math.PI*2);
   else ctx.rect(cx - size/2, cy - size/2, size, size);
 }
 function drawHead(beat){
@@ -1011,13 +1176,15 @@ function drawHead(beat){
 
 function render(clock){
   const S = SCALE, beat = beatPulse(clock);
+  RCAM = MODE === 2 ? {x: (ARENA.x0 + ARENA.x1)/2, y: (ARENA.y0 + ARENA.y1)/2} : G.cam;
+  const live = PL.filter(p => MODE === 1 || p.alive);
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.fillStyle = C.void; ctx.fillRect(0, 0, W, H);
   if (G.shake > 0 && !REDUCED) ctx.translate((Math.random()-.5)*G.shake*24, (Math.random()-.5)*G.shake*24);
 
   const hw = W/2/S, hh = H/2/S;
-  const vx0 = Math.floor(G.cam.x - hw) - 1, vx1 = Math.ceil(G.cam.x + hw) + 1;
-  const vy0 = Math.floor(G.cam.y - hh) - 1, vy1 = Math.ceil(G.cam.y + hh) + 3;
+  const vx0 = Math.floor(RCAM.x - hw) - 1, vx1 = Math.ceil(RCAM.x + hw) + 1;
+  const vy0 = Math.floor(RCAM.y - hh) - 1, vy1 = Math.ceil(RCAM.y + hh) + 3;
 
   const inset = Math.max(1, S*0.04);
   for (let gy = Math.max(vy0, ARENA.y0); gy <= Math.min(vy1, ARENA.y1 - 1); gy++)
@@ -1025,10 +1192,13 @@ function render(clock){
     ctx.fillStyle = (gx + gy) & 1 ? C['tile-a'] : C['tile-b'];
     const [sx, sy] = w2s(gx, gy); ctx.fillRect(sx + inset/2, sy + inset/2, S - inset, S - inset);
   }
-  const [hx, hy] = w2s(G.x, G.y), R = S*(4 + 1.5*beat + G.flash);
-  const gr = ctx.createRadialGradient(hx, hy, 0, hx, hy, R);
-  gr.addColorStop(0, ribA(0.1 + 0.12*beat + 0.15*G.flash)); gr.addColorStop(1, ribA(0));
-  ctx.fillStyle = gr; ctx.fillRect(hx - R, hy - R, R*2, R*2);
+  for (const p of live){
+    load(p);
+    const [hx, hy] = w2s(G.x, G.y), R = S*(4 + 1.5*beat + G.flash);
+    const gr = ctx.createRadialGradient(hx, hy, 0, hx, hy, R);
+    gr.addColorStop(0, ribA(0.1 + 0.12*beat + 0.15*G.flash)); gr.addColorStop(1, ribA(0));
+    ctx.fillStyle = gr; ctx.fillRect(hx - R, hy - R, R*2, R*2);
+  }
 
   const items = [];
   const inView = o => !(o.x > vx1 + 1 || o.x + o.w < vx0 - 1 || o.y > vy1 + 1 || o.y + o.h < vy0 - 2);
@@ -1051,26 +1221,30 @@ function render(clock){
     }
   for (const o of G.walls) if (inView(o)){ rectW(o.x + 0.25, o.y + 0.15, o.w, o.h, 0); }
 
-  drawRibbon();
-
-  if (G.K.magnet){
-    // the ring refills while the magnet recharges
-    const ready = G.magCool > 0 ? 1 - G.magCool/G.K.recharge : 1;
-    ctx.strokeStyle = ribA(ready < 1 ? 0.12 : 0.16 + 0.14*beat); ctx.lineWidth = Math.max(1, S*0.04);
-    ctx.setLineDash([S*0.18, S*0.14]);
-    ctx.beginPath(); ctx.arc(hx, hy, G.K.magnet*S, -Math.PI/2, -Math.PI/2 + Math.PI*2*ready); ctx.stroke();
-    ctx.setLineDash([]);
+  for (const p of live){
+    load(p);
+    drawRibbon();
+    if (G.K.magnet){
+      // the ring refills while the magnet recharges
+      const [hx, hy] = w2s(G.x, G.y), ready = G.magCool > 0 ? 1 - G.magCool/G.K.recharge : 1;
+      ctx.strokeStyle = ribA(ready < 1 ? 0.12 : 0.16 + 0.14*beat); ctx.lineWidth = Math.max(1, S*0.04);
+      ctx.setLineDash([S*0.18, S*0.14]);
+      ctx.beginPath(); ctx.arc(hx, hy, G.K.magnet*S, -Math.PI/2, -Math.PI/2 + Math.PI*2*ready); ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
 
   for (const o of WALLS) if (inView(o)) items.push({k: o.y + o.h, o});
   for (const o of G.walls) if (inView(o)) items.push({k: o.y + o.h, o});
-  items.push({k: G.y + HEAD/2, head: true});
+  for (const p of live) items.push({k: p.y + HEAD/2, head: p});
+  load(PL[0]);
   items.sort((a, b) => a.k - b.k);
   for (const it of items){
     if (it.o) drawBlock(it.o);
     else if (it.g) drawGem(it.g, clock);
-    else drawHead(beat);
+    else { load(it.head); drawHead(beat); }
   }
+  load(PL[0]);
 
   for (const p of G.particles){
     const [sx, sy] = w2s(p.x, p.y), s = p.size*S;
@@ -1097,7 +1271,6 @@ function makeR3(){
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x000000, 7, 36);
-  const camera = new THREE.PerspectiveCamera(74, 1, 0.05, 160);
   scene.add(new THREE.AmbientLight(0xffffff, 1.3));
   const sun = new THREE.DirectionalLight(0xffffff, 1.7); sun.position.set(4, 10, 3); scene.add(sun);
 
@@ -1146,15 +1319,42 @@ function makeR3(){
     for (const [g, o] of gemObjs) if (!seen.has(g)) dropGem(g, o);
   }
 
-  // body: one box per half-cell piece, colored from dim tail to bright neck (same gradient as the 2D ribbon)
+  // ---- per-snake graphics: body, jump dots, head, shadow, glow, magnet ring and its own camera ----
   const MAX_BODY = 1500, MAX_DOTS = 400, MAX_PARTS = 400;
-  const body = new THREE.InstancedMesh(BOX, [gray(0.45), gray(0.45), gray(1), gray(0.3), gray(0.65), gray(0.65)].map(c => new THREE.MeshBasicMaterial({color: c})), MAX_BODY);
-  const dots = new THREE.InstancedMesh(BOX, new THREE.MeshBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.4}), MAX_DOTS);
+  const bodyMats = [gray(0.45), gray(0.45), gray(1), gray(0.3), gray(0.65), gray(0.65)].map(c => new THREE.MeshBasicMaterial({color: c}));
+  const SHADOW_GEO = new THREE.CircleGeometry(0.34, 24), PLANE_GEO = new THREE.PlaneGeometry(1, 1);
   const parts = new THREE.InstancedMesh(BOX, new THREE.MeshBasicMaterial({color: 0xffffff}), MAX_PARTS);
-  for (const m of [body, parts]) for (let i = 0; i < m.count; i++) m.setColorAt(i, tmpC.setRGB(1, 1, 1));
-  for (const m of [body, dots, parts]){ m.count = 0; m.frustumCulled = false; scene.add(m); }
-  let RIB3 = [];
-  function updateBody(){
+  for (let i = 0; i < MAX_PARTS; i++) parts.setColorAt(i, tmpC.setRGB(1, 1, 1));
+  parts.count = 0; parts.frustumCulled = false; scene.add(parts);
+  let GFX = [];
+  function makeGfx(){
+    // built while the player is loaded, so C.ribbon / RIB are that snake's colors
+    const g = {ringReady: -1, RIB3: RIB.map(c => col(c)), yaw: G.th, snap: true, camPos: new THREE.Vector3(), headShow: true,
+      camera: new THREE.PerspectiveCamera(74, 1, 0.05, 160)};
+    g.body = new THREE.InstancedMesh(BOX, bodyMats, MAX_BODY);
+    for (let i = 0; i < MAX_BODY; i++) g.body.setColorAt(i, tmpC.setRGB(1, 1, 1));
+    g.dots = new THREE.InstancedMesh(BOX, new THREE.MeshBasicMaterial({color: col(C.ribbon), transparent: true, opacity: 0.4}), MAX_DOTS);
+    for (const m of [g.body, g.dots]){ m.count = 0; m.frustumCulled = false; scene.add(m); }
+    g.head = new THREE.Group(); scene.add(g.head);
+    g.shadow = new THREE.Mesh(SHADOW_GEO, new THREE.MeshBasicMaterial({color: 0x080414, transparent: true, opacity: 0.45, depthWrite: false}));
+    g.floorGlow = new THREE.Mesh(PLANE_GEO, new THREE.MeshBasicMaterial({map: glowTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false}));
+    g.ring = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false}));
+    for (const m of [g.shadow, g.floorGlow, g.ring]){ m.rotation.x = -Math.PI/2; scene.add(m); }
+    buildHead(g);
+    return g;
+  }
+  function clearHead(g){
+    g.head.traverse(o => { if (o.isMesh){ o.geometry.dispose(); [].concat(o.material).forEach(m => m.dispose()); } if (o.isSprite) o.material.dispose(); });
+    g.head.clear();
+  }
+  function dropGfx(g){
+    clearHead(g);
+    for (const m of [g.body, g.dots, g.head, g.shadow, g.floorGlow, g.ring]) scene.remove(m);
+    g.body.dispose(); g.dots.dispose(); g.dots.material.dispose();
+    g.shadow.material.dispose(); g.floorGlow.material.dispose(); g.ring.geometry.dispose(); g.ring.material.dispose();
+  }
+  // body: one box per half-cell piece, colored from dim tail to bright neck (same gradient as the 2D ribbon)
+  function updateBody(g){
     const T = G.trail, segs = []; let total = 0;
     for (let i = 0; i < T.length; i++){
       const a = T[i], b = T[i+1] || G, L = Math.hypot(b.x-a.x, b.y-a.y);
@@ -1168,7 +1368,7 @@ function makeR3(){
       if (s.a.air){
         // the stretch you jumped leaves a dotted trail that can't hurt you
         const k = Math.floor(s.L/0.4);
-        for (let j = 1; j < k && nd < MAX_DOTS; j++){ const f = j/k; if (s.s + s.L*f > cut) break; setInst(dots, nd++, s.a.x + (s.b.x-s.a.x)*f, 0.45, s.a.y + (s.b.y-s.a.y)*f, 0.12, 0.12, 0.12); }
+        for (let j = 1; j < k && nd < MAX_DOTS; j++){ const f = j/k; if (s.s + s.L*f > cut) break; setInst(g.dots, nd++, s.a.x + (s.b.x-s.a.x)*f, 0.45, s.a.y + (s.b.y-s.a.y)*f, 0.12, 0.12, 0.12); }
         continue;
       }
       const pieces = Math.max(1, Math.ceil(s.L/0.5));
@@ -1180,53 +1380,48 @@ function makeR3(){
         const frac = (s.s + s.L*(f0+f1)/2) / (total || 1);
         // each piece is a box turned to follow the curve, a bit longer than its stretch so curves stay closed
         const h = BODY_H*(0.96 + 0.04*frac); // newer pieces sit a hair taller so overlaps don't flicker
-        setInst(body, n, (ax + bx)/2, h/2, (ay + by)/2, Math.hypot(bx-ax, by-ay) + LINE_W*0.7, h, LINE_W, Math.atan2(by-ay, bx-ax));
-        body.setColorAt(n++, RIB3[Math.min(RIB3.length-1, Math.floor(frac*RIB3.length))]);
+        setInst(g.body, n, (ax + bx)/2, h/2, (ay + by)/2, Math.hypot(bx-ax, by-ay) + LINE_W*0.7, h, LINE_W, Math.atan2(by-ay, bx-ax));
+        g.body.setColorAt(n++, g.RIB3[Math.min(g.RIB3.length-1, Math.floor(frac*g.RIB3.length))]);
       }
     }
-    body.count = n; body.instanceMatrix.needsUpdate = true; if (body.instanceColor) body.instanceColor.needsUpdate = true;
-    dots.count = nd; dots.instanceMatrix.needsUpdate = true;
+    g.body.count = n; g.body.instanceMatrix.needsUpdate = true; if (g.body.instanceColor) g.body.instanceColor.needsUpdate = true;
+    g.dots.count = nd; g.dots.instanceMatrix.needsUpdate = true;
   }
 
-  // head: cube, dart or ball to match the snake, plus eyes, a glow and a shadow that shrinks as you jump
-  const head = new THREE.Group(); scene.add(head);
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.34, 24), new THREE.MeshBasicMaterial({color: 0x080414, transparent: true, opacity: 0.45, depthWrite: false}));
-  shadow.rotation.x = -Math.PI/2; scene.add(shadow);
-  const floorGlow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({map: glowTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false}));
-  floorGlow.rotation.x = -Math.PI/2; scene.add(floorGlow);
-  const ring = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false}));
-  ring.rotation.x = -Math.PI/2; scene.add(ring);
-  let ringReady = -1, headGlow = null;
-  function buildHead(){
-    head.traverse(o => { if (o.isMesh){ o.geometry.dispose(); [].concat(o.material).forEach(m => m.dispose()); } if (o.isSprite) o.material.dispose(); });
-    head.clear();
-    const K = G.K, top = col(C.ribbon), side = col(C['ribbon-side']);
+  // head: cube, dart, ball or comet to match the snake, plus eyes and a glow
+  function buildHead(g){
+    clearHead(g);
+    const head = g.head, K = G.K, top = col(C.ribbon), side = col(C['ribbon-side']);
     const dark = new THREE.MeshBasicMaterial({color: col(C.night)}), ink = new THREE.MeshBasicMaterial({color: col(C.ink)});
     const lit = new THREE.MeshPhongMaterial({color: top, emissive: top, emissiveIntensity: 0.35, flatShading: true, shininess: 30});
     let h, eyeX, eyeZ, eyeY;
     if (K.shape === 'arrow'){
-      const g = new THREE.ConeGeometry(0.38, 0.8, 3); g.rotateZ(-Math.PI/2); g.rotateX(Math.PI/2); g.scale(1, 0.45, 1);
-      const m = new THREE.Mesh(g, lit); h = 0.2; m.position.y = h; head.add(m);
+      const geo = new THREE.ConeGeometry(0.38, 0.8, 3); geo.rotateZ(-Math.PI/2); geo.rotateX(Math.PI/2); geo.scale(1, 0.45, 1);
+      const m = new THREE.Mesh(geo, lit); h = 0.2; m.position.y = h; head.add(m);
       eyeX = 0.04; eyeZ = 0.1; eyeY = h + 0.09;
     } else if (K.shape === 'round'){
       const r = HEAD*0.56, m = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), lit); h = r; m.position.y = r; head.add(m);
       for (const z of [-1, 1]){ const pr = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), ink); pr.position.set(r*0.9, r*1.1, z*r*0.55); head.add(pr); }
       eyeX = r*0.6; eyeZ = r*0.3; eyeY = r*1.45;
+    } else if (K.shape === 'comet'){
+      // a sleek bullet laid along the heading, with a little fin on top
+      const r = 0.2, geo = new THREE.CapsuleGeometry(r, 0.42, 6, 16); geo.rotateZ(Math.PI/2);
+      const m = new THREE.Mesh(geo, lit); h = r + 0.02; m.position.y = h; head.add(m);
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.04), new THREE.MeshBasicMaterial({color: side})); fin.position.set(-0.16, h + r + 0.03, 0); head.add(fin);
+      eyeX = 0.16; eyeZ = 0.09; eyeY = h + r*0.9;
     } else {
       const m = new THREE.Mesh(new THREE.BoxGeometry(HEAD, HEAD, HEAD), boxMats(C.ribbon, C['ribbon-side']));
       h = HEAD/2; m.position.y = h; head.add(m);
       eyeX = HEAD*0.2; eyeZ = HEAD*0.2; eyeY = HEAD + 0.005;
     }
     for (const z of [-1, 1]){ const e = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.02, 0.09), dark); e.position.set(eyeX, eyeY, z*eyeZ); head.add(e); }
-    headGlow = glowSprite(C.ribbon, 0.6); headGlow.position.y = h; head.add(headGlow);
-    floorGlow.material.color = side.clone().lerp(top, 0.5);
-    ring.material.color = top.clone();
-    ringReady = -1;
+    g.headGlow = glowSprite(C.ribbon, 0.6); g.headGlow.position.y = h; head.add(g.headGlow);
+    g.floorGlow.material.color = side.clone().lerp(top, 0.5);
+    g.ring.material.color = top.clone();
+    g.ringReady = -1;
   }
 
   // level: floor, walls and obstacles are fixed once a level loads, so build them once
-  let yaw = 0, snapCam = true;
-  const camPos = new THREE.Vector3();
   function build(){
     level.traverse(o => { if (o.isMesh){ if (o.geometry !== BOX) o.geometry.dispose(); [].concat(o.material).forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); } });
     level.clear();
@@ -1253,43 +1448,15 @@ function makeR3(){
     for (const o of G.walls) addBox(o, WALL_H, mats.wall);
     for (const c of G.chunks.values()) for (const o of c.obs) addBox(o, o.tall ? TALL_H : LOW_H, o.tall ? mats.tall : mats.low);
 
-    RIB3 = RIB.map(c => col(c));
-    dots.material.color = col(C.ribbon);
-    buildHead();
-    yaw = G.th; snapCam = true;
+    GFX.forEach(dropGfx);
+    GFX = PL.map(p => { load(p); return makeGfx(); });
+    load(PL[0]);
   }
 
   function render(clock, dt){
-    if (!G) return;
-    const beat = beatPulse(clock), K = G.K;
-    // the camera follows the snake's heading with a little lag, which softens any wobble
-    yaw += angDiff(G.th, yaw)*(snapCam ? 1 : 1 - Math.exp(-dt*(REDUCED ? 30 : 9)));
-    const fx = Math.cos(yaw), fz = Math.sin(yaw);
-    const p = G.air ? Math.min(1, G.airT/G.airDur) : 0, jh = Math.sin(Math.PI*p)*1.2*Math.sqrt(K.jump);
-
+    if (!G || !GFX.length) return;
+    const beat = beatPulse(clock);
     syncGems(clock);
-    updateBody();
-
-    const dead = state === 'dying' || state === 'over' || state === 'lost';
-    head.visible = view !== 'eye' && !(dead && Math.floor(G.deadT*12) % 2);
-    head.position.set(G.x, jh, G.y); head.rotation.y = -G.th; head.scale.setScalar(1 + 0.1*beat);
-    if (headGlow) headGlow.scale.setScalar(HEAD*(2.4 + 0.8*beat));
-    shadow.visible = head.visible; shadow.position.set(G.x, 0.011, G.y);
-    shadow.scale.setScalar(Math.max(0.5, 1 - 0.22*jh)); shadow.material.opacity = Math.max(0.15, 0.45 - 0.15*jh);
-    const R = 4 + 1.5*beat + G.flash;
-    floorGlow.position.set(G.x, 0.01, G.y); floorGlow.scale.set(R*2, R*2, 1);
-    floorGlow.material.opacity = Math.min(1, 0.25 + 0.3*beat + 0.4*G.flash);
-
-    ring.visible = !!K.magnet;
-    if (K.magnet){
-      const ready = G.magCool > 0 ? 1 - G.magCool/K.recharge : 1;
-      if (Math.abs(ready - ringReady) > 0.01){
-        ring.geometry.dispose();
-        ring.geometry = new THREE.RingGeometry(K.magnet - 0.04, K.magnet + 0.04, 72, 1, Math.PI/2, Math.max(0.01, ready)*Math.PI*2);
-        ringReady = ready;
-      }
-      ring.position.set(G.x, 0.02, G.y); ring.material.opacity = ready < 1 ? 0.18 : 0.28 + 0.25*beat;
-    }
 
     let np = 0;
     for (const pt of G.particles){
@@ -1300,47 +1467,96 @@ function makeR3(){
     }
     parts.count = np; parts.instanceMatrix.needsUpdate = true; if (parts.instanceColor) parts.instanceColor.needsUpdate = true;
 
-    // cameras: eye sits inside the head; chase floats behind and above it
-    const sh = G.shake > 0 && !REDUCED ? G.shake : 0, rx = (Math.random()-.5)*sh*0.4, ry = (Math.random()-.5)*sh*0.4;
-    if (view === 'eye'){
-      camera.fov = 76 + 2*beat;
-      camera.position.set(G.x - fx*0.12 + rx, EYE_H + jh + ry, G.y - fz*0.12);
-      camera.lookAt(G.x + fx*6, 0.15 + jh*0.5, G.y + fz*6);
-    } else {
-      camera.fov = 62 + 1.5*beat;
-      v3.set(G.x - fx*3.6, 2.5 + jh*0.4, G.y - fz*3.6);
-      if (snapCam) camPos.copy(v3); else camPos.lerp(v3, 1 - Math.exp(-dt*6));
-      camera.position.set(camPos.x + rx, camPos.y + ry, camPos.z);
-      camera.lookAt(G.x + fx*2.6, 0.35 + jh*0.5, G.y + fz*2.6);
+    const dying = state === 'dying' || state === 'over' || state === 'lost';
+    const sh = G.shake > 0 && !REDUCED ? G.shake : 0;
+    PL.forEach((p, i) => {
+      const g = GFX[i]; if (!g) return;
+      load(p);
+      const K = G.K, gone = MODE === 2 && !p.alive;
+      // the camera follows the snake's heading with a little lag, which softens any wobble
+      g.yaw += angDiff(G.th, g.yaw)*(g.snap ? 1 : 1 - Math.exp(-dt*(REDUCED ? 30 : 9)));
+      const fx = Math.cos(g.yaw), fz = Math.sin(g.yaw);
+      const ap = G.air ? Math.min(1, G.airT/G.airDur) : 0, jh = Math.sin(Math.PI*ap)*1.2*Math.sqrt(K.jump);
+
+      if (gone){ g.body.count = 0; g.dots.count = 0; } else updateBody(g);
+      // a solo crash flickers the head; a fresh respawn in versus blinks it while it can't be hit
+      g.headShow = !gone && !(MODE === 1 && dying && Math.floor(G.deadT*12) % 2) && !(p.grace > 0 && Math.floor(clock*10) % 2);
+      g.head.position.set(G.x, jh, G.y); g.head.rotation.y = -G.th; g.head.scale.setScalar(1 + 0.1*beat);
+      if (g.headGlow) g.headGlow.scale.setScalar(HEAD*(2.4 + 0.8*beat));
+      g.shadow.position.set(G.x, 0.011, G.y);
+      g.shadow.scale.setScalar(Math.max(0.5, 1 - 0.22*jh)); g.shadow.material.opacity = Math.max(0.15, 0.45 - 0.15*jh);
+      const R = 4 + 1.5*beat + G.flash;
+      g.floorGlow.visible = !gone;
+      g.floorGlow.position.set(G.x, 0.01, G.y); g.floorGlow.scale.set(R*2, R*2, 1);
+      g.floorGlow.material.opacity = Math.min(1, 0.25 + 0.3*beat + 0.4*G.flash);
+
+      g.ring.visible = !!K.magnet && !gone;
+      if (K.magnet){
+        const ready = G.magCool > 0 ? 1 - G.magCool/K.recharge : 1;
+        if (Math.abs(ready - g.ringReady) > 0.01){
+          g.ring.geometry.dispose();
+          g.ring.geometry = new THREE.RingGeometry(K.magnet - 0.04, K.magnet + 0.04, 72, 1, Math.PI/2, Math.max(0.01, ready)*Math.PI*2);
+          g.ringReady = ready;
+        }
+        g.ring.position.set(G.x, 0.02, G.y); g.ring.material.opacity = ready < 1 ? 0.18 : 0.28 + 0.25*beat;
+      }
+
+      // cameras: eye sits inside the head; chase floats behind and above it
+      const cam = g.camera, rx = (Math.random()-.5)*sh*0.4, ry = (Math.random()-.5)*sh*0.4;
+      if (view === 'eye'){
+        cam.fov = 76 + 2*beat;
+        cam.position.set(G.x - fx*0.12 + rx, EYE_H + jh + ry, G.y - fz*0.12);
+        cam.lookAt(G.x + fx*6, 0.15 + jh*0.5, G.y + fz*6);
+      } else {
+        cam.fov = (MODE === 2 ? 68 : 62) + 1.5*beat;
+        v3.set(G.x - fx*3.6, 2.5 + jh*0.4, G.y - fz*3.6);
+        if (g.snap) g.camPos.copy(v3); else g.camPos.lerp(v3, 1 - Math.exp(-dt*6));
+        cam.position.set(g.camPos.x + rx, g.camPos.y + ry, g.camPos.z);
+        cam.lookAt(G.x + fx*2.6, 0.35 + jh*0.5, G.y + fz*2.6);
+      }
+      g.snap = false;
+    });
+    load(PL[0]);
+
+    // draw: full screen in solo; in versus each player gets half the screen and their own camera
+    const W3 = innerWidth, H3 = innerHeight, n = GFX.length, vw = W3/n;
+    renderer.setScissorTest(n > 1);
+    for (let i = 0; i < n; i++){
+      // you never see your own head in eye view, but you do see your rival's
+      GFX.forEach((o, j) => { o.head.visible = o.headShow && !(view === 'eye' && j === i); o.shadow.visible = o.headShow; });
+      const cam = GFX[i].camera;
+      cam.aspect = vw/H3; cam.updateProjectionMatrix();
+      renderer.setViewport(i*vw, 0, vw, H3); renderer.setScissor(i*vw, 0, vw, H3);
+      renderer.render(scene, cam);
     }
-    camera.updateProjectionMatrix();
-    snapCam = false;
-    renderer.render(scene, camera);
   }
-  function resize(){
-    renderer.setSize(innerWidth, innerHeight, false);
-    camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
-  }
+  function snap(i){ if (GFX[i]) GFX[i].snap = true; }
+  function resize(){ renderer.setSize(innerWidth, innerHeight, false); }
   resize();
-  return {build, render, resize};
+  return {build, render, resize, snap};
 }
 
 // ---- phone controller link ----
 // The big screen registers a short code with the free PeerJS broker; the phone page joins it and
-// the two talk directly over WebRTC. Phone sends {t:'turn',d:±1}, {t:'jump'}, {t:'go'}, {t:'pause'}, {t:'view'};
+// the two talk directly over WebRTC. Phone sends {t:'steer',v}, {t:'jump'}, {t:'go'}, {t:'pause'}, {t:'view'}, {t:'name'};
 // the game sends back {t:'state',...} for the phone's screen and {t:'buzz',p} for haptics.
-const PHONE = {peer: null, conn: null, code: ''};
+// Up to two phones can join the same code: the first is player 1, the second player 2.
+const PHONE = {peer: null, conns: [null, null], code: ''};
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const newCode = () => Array.from({length: 4}, () => CODE_CHARS[Math.floor(Math.random()*CODE_CHARS.length)]).join('');
 const controllerURL = code => { const u = new URL('controller.html', location.href); u.hash = code; return u.href; };
-const phoneOn = () => !!(PHONE.conn && PHONE.conn.open);
-function phoneSend(msg){ if (phoneOn()) try { PHONE.conn.send(msg); } catch(_) {} }
+const phoneOn = i => i === undefined ? PHONE.conns.some(c => c && c.open) : !!(PHONE.conns[i] && PHONE.conns[i].open);
+function phoneSend(msg, only){
+  PHONE.conns.forEach((c, i) => { if (c && c.open && (only === undefined || only === i)) try { c.send(msg); } catch(_) {} });
+}
 function setPhoneUI(note){
-  const on = phoneOn();
+  const on = phoneOn(), both = phoneOn(0) && phoneOn(1);
   $('phoneChip').classList.toggle('on', on);
-  $('phoneChipTxt').textContent = on ? 'Phone connected' : PHONE.code ? 'Phone code ' + PHONE.code : 'No phone';
+  $('phoneChipTxt').textContent = both ? '2 phones connected' : on ? 'Phone connected' : PHONE.code ? 'Phone code ' + PHONE.code : 'No phone';
   $('phoneCode').textContent = PHONE.code || '····';
   if (note) { $('phoneDesc').textContent = note; return; }
+  if (MODE === 2 && both) { $('phoneDesc').innerHTML = '<b>Both phones connected.</b> Ready to race.'; return; }
+  if (MODE === 2 && on) { $('phoneDesc').innerHTML = `<b>Player ${phoneOn(0) ? 1 : 2} is connected.</b> Player ${phoneOn(0) ? 2 : 1}: scan the same code.`; return; }
   if (on) { $('phoneDesc').innerHTML = '<b>Phone connected.</b> Tilt to steer, jump to jump.'; return; }
   const url = controllerURL(PHONE.code);
   $('phoneDesc').innerHTML = location.protocol === 'file:'
@@ -1362,12 +1578,16 @@ function startPhoneLink(){
     PHONE.peer = peer;
     peer.on('open', () => { store.set('phone', code); drawQR(); setPhoneUI(); });
     peer.on('connection', conn => {
+      let slot = -1;
       conn.on('open', () => {
-        if (PHONE.conn && PHONE.conn !== conn) try { PHONE.conn.close(); } catch(_) {}
-        PHONE.conn = conn; setPhoneUI(); syncPhone(true); buzz(30);
+        // take the first free seat; a third phone is politely turned away
+        slot = PHONE.conns.findIndex(c => !c || !c.open);
+        if (slot < 0){ try { conn.send({t: 'full'}); } catch(_) {} setTimeout(() => conn.close(), 300); return; }
+        PHONE.conns[slot] = conn; setPhoneUI(); lastPhone[slot] = ''; syncPhone(true);
+        phoneSend({t: 'buzz', p: 30}, slot);
       });
-      conn.on('data', onPhone);
-      conn.on('close', () => { if (PHONE.conn === conn){ PHONE.conn = null; setPhoneUI(); } });
+      conn.on('data', m => { if (slot >= 0) onPhone(m, slot); });
+      conn.on('close', () => { if (slot >= 0 && PHONE.conns[slot] === conn){ PHONE.conns[slot] = null; setPhoneUI(); } });
     });
     peer.on('error', err => {
       if (err.type === 'unavailable-id'){
@@ -1385,34 +1605,69 @@ function startPhoneLink(){
 }
 function goAction(){
   if (state === 'menu') start(stage);
-  else if (state === 'over') start(0);
+  else if (state === 'over') start(MODE === 2 ? G.idx : 0);
   else if (state === 'lost') retryLevel();
   else if (state === 'clear') nextStage();
   else if (state === 'paused') resume();
 }
-function onPhone(m){
+function onPhone(m, slot){
   if (!m || typeof m !== 'object') return;
-  if (m.t === 'steer'){ STEER.phone = clamp1(+m.v || 0); STEER.phoneAt = performance.now(); }
-  else if (m.t === 'jump') jump();
+  const pi = MODE === 2 ? slot : 0;   // in solo either phone drives the one snake
+  if (m.t === 'steer'){ STEERS[pi].phone = clamp1(+m.v || 0); STEERS[pi].phoneAt = performance.now(); }
+  else if (m.t === 'jump') jumpFor(pi);
   else if (m.t === 'go') goAction();
   else if (m.t === 'pause'){ if (state === 'play') pause(); else if (state === 'paused') resume(); }
   else if (m.t === 'view') cycleView();
   else if (m.t === 'name') saveName(m.name);
 }
-let lastPhone = '';
+const lastPhone = ['', ''];
 function syncPhone(force){
   if (!phoneOn() || !G) return;
-  const go = {menu: `Start level ${stage + 1}`, over: 'New run', lost: `Restart level ${G.idx + 1}`, clear: `Start level ${G.idx + 2}`, paused: 'Resume'}[state] || '';
-  const ask = pending ? {rank: rankFor(pending.diff, pending.score) + 1, score: pending.score, name: store.get('name') || ''} : null;
-  const msg = {t: 'state', state, go, view, ask, score: state === 'menu' ? 0 : score(), lives: RUN.lives, level: G.idx + 1, name: G.S.name, gems: Math.min(G.gems, G.S.goal), goal: G.S.goal};
-  const key = JSON.stringify(msg);
-  if (!force && key === lastPhone) return;
-  lastPhone = key; phoneSend(msg);
+  const go = {menu: MODE === 2 ? 'Start the race' : `Start level ${stage + 1}`, over: MODE === 2 ? 'Rematch' : 'New run',
+    lost: `Restart level ${G.idx + 1}`, clear: `Start level ${G.idx + 2}`, paused: 'Resume'}[state] || '';
+  const ask = MODE === 1 && pending ? {rank: rankFor(pending.diff, pending.score) + 1, score: pending.score, name: store.get('name') || ''} : null;
+  PHONE.conns.forEach((c, slot) => {
+    if (!c || !c.open) return;
+    const p = MODE === 2 ? PL[slot] : PL[0];
+    const msg = MODE === 2
+      ? {t: 'state', state, go, view, mode: 2, player: slot + 1, color: p.look.color, score: pScore(p), lives: p.lives,
+         level: G.idx + 1, name: G.S.name, gems: p.gems, goal: null, left: Math.max(0, Math.ceil(G.left)), alive: p.alive}
+      : {t: 'state', state, go, view, mode: 1, ask, score: state === 'menu' ? 0 : score(), lives: RUN.lives,
+         level: G.idx + 1, name: G.S.name, gems: Math.min(G.gems, G.S.goal), goal: G.S.goal};
+    const key = JSON.stringify(msg);
+    if (!force && key === lastPhone[slot]) return;
+    lastPhone[slot] = key;
+    try { c.send(msg); } catch(_) {}
+  });
 }
 
 // ---- HUD ----
 let lastHud = '';
+const HEART = 'M8 14s-6-3.6-6-7.6A3.2 3.2 0 0 1 8 4.3a3.2 3.2 0 0 1 6 2.1C14 10.4 8 14 8 14z';
+const heartsHTML = n => Array.from({length: LIVES}, (_, i) => `<svg viewBox="0 0 16 16"><path class="${i < n ? 'on' : 'off'}" d="${HEART}"/></svg>`).join('');
+// show the solo HUD or the versus one (two scoreboards, a clock and a divider)
+function applyModeUI(){
+  $('duo').hidden = MODE !== 2; $('split').hidden = MODE !== 2 || view === 'top';
+  $('hudMain').hidden = MODE === 2;
+  lastHud = '';
+}
 function updateHUD(){
+  if (MODE === 2){
+    const left = Math.max(0, Math.ceil(G.left));
+    const key = PL.map(p => [pScore(p), p.lives, p.alive, p.look.color]).join('|') + '|' + left + state;
+    if (key === lastHud) return;
+    lastHud = key;
+    PL.forEach((p, i) => {
+      const el = $('duo' + i);
+      $('duoTag' + i).style.background = p.look.color;
+      el.querySelector('.sc').textContent = pScore(p);
+      el.querySelector('.hearts').innerHTML = heartsHTML(p.lives);
+      $('duoMsg' + i).textContent = state !== 'play' || p.alive ? '' : p.lives > 0 ? 'Respawning…' : 'Out of lives';
+    });
+    $('duoT').textContent = `${Math.floor(left/60)}:${String(left % 60).padStart(2, '0')}`;
+    $('duoT').classList.toggle('hurry', left <= 10 && state === 'play');
+    return;
+  }
   const sc = state === 'menu' ? 0 : score();
   const sub = `Level ${G.idx + 1} · ${G.S.name}`;
   const got = Math.min(G.gems, G.S.goal);
@@ -1420,8 +1675,7 @@ function updateHUD(){
   const key = sc + '|' + sub + '|' + got + '|' + lives;
   if (key === lastHud) return;
   lastHud = key;
-  const HEART = 'M8 14s-6-3.6-6-7.6A3.2 3.2 0 0 1 8 4.3a3.2 3.2 0 0 1 6 2.1C14 10.4 8 14 8 14z';
-  $('lives').innerHTML = Array.from({length: LIVES}, (_, i) => `<svg viewBox="0 0 16 16"><path class="${i < lives ? 'on' : 'off'}" d="${HEART}"/></svg>`).join('');
+  $('lives').innerHTML = heartsHTML(lives);
   $('lives').setAttribute('aria-label', `${lives} ${lives === 1 ? 'life' : 'lives'} left`);
   $('score').textContent = sc; $('sub').textContent = sub;
   $('goalFill').style.width = (100*got/G.S.goal) + '%';
@@ -1434,6 +1688,7 @@ function snakeIcon(k){
   const top = `fill:var(--${k})`, side = `fill:var(--${k}-side)`, eye = 'fill:var(--night)';
   if (k === 'glider') return `<svg class="sn" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 14L4 5l4 9-4 9z" style="${side}"/><path d="M22 12L4 3l4 9-4 9z" style="${top}"/><rect x="11" y="9.3" width="2" height="2" style="${eye}"/><rect x="11" y="12.7" width="2" height="2" style="${eye}"/></svg>`;
   if (k === 'magnet') return `<svg class="sn" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="14" r="8" style="${side}"/><circle cx="11" cy="12" r="8" style="${top}"/><rect x="16" y="6.5" width="3" height="3" style="fill:var(--ink)"/><rect x="16" y="14.5" width="3" height="3" style="fill:var(--ink)"/><rect x="12" y="9" width="2" height="2" style="${eye}"/><rect x="12" y="13" width="2" height="2" style="${eye}"/></svg>`;
+  if (k === 'comet') return `<svg class="sn" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="7" height="5" style="${side}"/><rect x="2" y="10" width="20" height="10" rx="5" style="${side}"/><rect x="2" y="7" width="20" height="10" rx="5" style="${top}"/><rect x="15" y="9.5" width="2" height="2" style="${eye}"/><rect x="15" y="13" width="2" height="2" style="${eye}"/></svg>`;
   return `<svg class="sn" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="8" width="16" height="13" style="${side}"/><rect x="4" y="4" width="16" height="14" style="${top}"/><rect x="13" y="7.5" width="2.5" height="2.5" style="${eye}"/><rect x="13" y="12" width="2.5" height="2.5" style="${eye}"/></svg>`;
 }
 function buildSeg(boxId, name, items, onPick){
@@ -1446,6 +1701,14 @@ function buildSeg(boxId, name, items, onPick){
     lab.querySelector('input').addEventListener('change', () => onPick(it.value));
     box.appendChild(lab);
   }
+}
+buildSeg('modePick', 'mode', [{value: 1, html: '<b class="num">1</b><small>Solo</small>'}, {value: 2, html: '<b class="num">2</b><small>Versus</small>'}], v => setMode(+v));
+function setMode(m){
+  MODE = m; store.set('players', m);
+  // solo keeps its unlock order; versus can race on any level
+  if (MODE === 1 && stage >= unlocked){ stage = unlocked - 1; store.set('stage', stage); }
+  if (MODE === 2 && view === 'top') setView('chase');
+  applyModeUI(); setPhoneUI(); refreshMenu(); resize();
 }
 buildSeg('stagePick', 'stage', STAGES.map((S, i) => ({value: i, html: `<b class="num">${i + 1}</b>${LOCK}`})), v => {
   stage = +v; store.set('stage', stage); refreshMenu();
@@ -1465,8 +1728,10 @@ function viewIcon(k){
 buildSeg('viewPick', 'view', Object.keys(VIEWS).map(k => ({value: k, html: `${viewIcon(k)}<b>${VIEWS[k].name}</b>`})), v => setView(v));
 function setView(v){
   if (!R3) v = 'top';
+  else if (MODE === 2 && v === 'top') v = 'chase';   // versus needs the split 3D views
   view = v; store.set('view', v);
   $('world').hidden = $('vig').hidden = v === 'top';
+  $('split').hidden = MODE !== 2 || v === 'top';
   pointers.clear();
   resize();
   $('view-' + v).checked = true;
@@ -1474,12 +1739,12 @@ function setView(v){
   syncPhone();
 }
 function cycleView(){
-  const ks = Object.keys(VIEWS).filter(k => R3 || k === 'top');
+  const ks = Object.keys(VIEWS).filter(k => (R3 || k === 'top') && !(MODE === 2 && k === 'top'));
   setView(ks[(ks.indexOf(view) + 1) % ks.length]);
 }
 function updateMenuUI(){
   STAGES.forEach((S, i) => {
-    const inp = $('stage-' + i), locked = i >= unlocked;
+    const inp = $('stage-' + i), locked = MODE === 1 && i >= unlocked;
     inp.disabled = locked;
     inp.closest('.opt').classList.toggle('locked', locked);
     inp.setAttribute('aria-label', locked ? `Level ${i + 1}, locked` : `Level ${i + 1}, ${S.name}`);
@@ -1487,28 +1752,54 @@ function updateMenuUI(){
   $('stage-' + stage).checked = true;
   $('snake-' + snake).checked = true;
   $('diff-' + diff).checked = true;
+  $('mode-' + MODE).checked = true;
+  $('modeDesc').innerHTML = MODE === 2
+    ? '<b>Versus.</b> Two snakes, one arena, 60 seconds. Race for the same gems. Crash into anything, including each other, and you lose a life and respawn. Highest score wins.'
+    : '<b>Solo.</b> Clear each level’s gem goal to unlock the next.';
   for (const k in VIEWS){
-    const inp = $('view-' + k), off = !R3 && k !== 'top';
+    const inp = $('view-' + k), off = (!R3 && k !== 'top') || (MODE === 2 && k === 'top');
     inp.disabled = off; inp.closest('.opt').classList.toggle('locked', off);
   }
   $('view-' + view).checked = true;
   $('viewDesc').textContent = VIEWS[view].desc;
   const S = STAGES[stage];
-  $('stageDesc').innerHTML = `<b>${S.name}.</b> Eat ${S.goal} gems to clear it. Music: ${STYLES[S.music].name}.` +
-    (unlocked < STAGES.length ? ` Level ${unlocked + 1} unlocks when you clear level ${unlocked}.` : '');
+  $('stageDesc').innerHTML = MODE === 2
+    ? `<b>${S.name}.</b> Music: ${STYLES[S.music].name}.`
+    : `<b>${S.name}.</b> Eat ${S.goal} gems to clear it. Music: ${STYLES[S.music].name}.` +
+      (unlocked < STAGES.length ? ` Level ${unlocked + 1} unlocks when you clear level ${unlocked}.` : '');
   $('snakeDesc').textContent = SNAKES[snake].desc;
   $('diffDesc').textContent = DIFFS[diff].desc;
   $('menuBoardLabel').textContent = DIFFS[diff].name;
   renderBoard($('menuBoard'), diff, lastEntry);
   for (const k in bests) $('best-' + k).textContent = 'Best ' + bests[k];
-  $('startBtn').textContent = `Start level ${stage + 1}`;
+  $('startBtn').textContent = MODE === 2 ? `Start versus · level ${stage + 1}` : `Start level ${stage + 1}`;
+  $('snakeLabel').textContent = MODE === 2 ? 'Snake (both players)' : 'Snake';
 }
 // show the chosen level and snake behind the menu
 function refreshMenu(){ updateMenuUI(); if (state === 'menu'){ RUN = newRunState(); loadStage(stage); } }
 
 // ---- flow ----
 const CAUSES = {tail: 'You bit your own tail', hurdle: 'You clipped a hurdle. Tap to jump it', pillar: 'You hit a pillar', wall: 'You ran into a wall'};
-function hideOverlays(){ for (const id of ['menu', 'clear', 'lost', 'over', 'pause']) $(id).hidden = true; }
+function hideOverlays(){ for (const id of ['menu', 'clear', 'lost', 'over', 'pause', 'duel']) $(id).hidden = true; }
+function showDuel(){
+  const sc = PL.map(pScore), timeUp = G.left <= 0;
+  const w = sc[0] === sc[1] ? -1 : sc[0] > sc[1] ? 0 : 1;
+  $('duelEyebrow').textContent = timeUp ? "Time's up" : 'Both snakes are out of lives';
+  $('duelTitle').textContent = w < 0 ? "It's a tie" : `Player ${w + 1} wins`;
+  $('duelTitle').style.color = w < 0 ? '' : PL[w].look.color;
+  $('duelTitle').style.textShadow = w < 0 ? '' : `0 4px 0 ${PL[w].look.side}`;
+  PL.forEach((p, i) => {
+    const el = $('vs' + i);
+    el.querySelector('.v').textContent = sc[i];
+    el.querySelector('small').textContent = `${p.gems} ${p.gems === 1 ? 'gem' : 'gems'} · ${p.lives} ${p.lives === 1 ? 'life' : 'lives'} left`;
+    el.style.color = p.look.color; el.classList.toggle('win', i === w);
+    el.querySelector('.v').style.color = 'var(--ink)';
+  });
+  $('rematchBtn').textContent = `Rematch on level ${G.idx + 1}`;
+  hideOverlays(); $('duel').hidden = false;
+  phoneSend({t: 'buzz', p: [30, 60, 30, 60, 90]});
+  setTimeout(() => $('rematchBtn').focus({preventScroll: true}), 50);
+}
 function showLost(){
   const n = RUN.lives;
   $('lostCause').textContent = CAUSES[G.cause] || 'You crashed';
@@ -1635,7 +1926,7 @@ function toMenu(){
 }
 function pause(){
   if (state !== 'play') return;
-  state = 'paused'; stopMusic(); pointers.clear(); STEER.drag = 0; keepAwake(false);
+  state = 'paused'; stopMusic(); pointers.clear(); for (const st of STEERS) st.drag = 0; keepAwake(false);
   $('pause').hidden = false; $('pauseBtn').hidden = true;
   $('resumeBtn').focus({preventScroll: true});
 }
@@ -1650,6 +1941,8 @@ $('retryBtn').addEventListener('click', retryLevel);
 $('setupBtn').addEventListener('click', toMenu);
 $('nextBtn').addEventListener('click', nextStage);
 $('resumeBtn').addEventListener('click', resume);
+$('rematchBtn').addEventListener('click', () => start(G.idx));
+$('duelMenuBtn').addEventListener('click', toMenu);
 $('nameBtn').addEventListener('click', () => saveName($('nameIn').value));
 $('nameIn').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); e.stopPropagation(); saveName($('nameIn').value); } });
 $('pauseBtn').addEventListener('click', pause);
@@ -1680,7 +1973,7 @@ for (const el of [cvs, $('world')]){
     const p = pointers.get(e.pointerId); if (!p) return;
     pointers.delete(e.pointerId);
     if (p.turned) STEER.drag = 0;
-    if (!p.turned && e.type === 'pointerup') jump();
+    if (!p.turned && e.type === 'pointerup') jumpFor(0);
   };
   el.addEventListener('pointerup', endPointer);
   el.addEventListener('pointercancel', endPointer);
@@ -1694,28 +1987,40 @@ for (const el of [cvs, $('world')]){
 addEventListener('pointerdown', () => initAudio(), true);
 addEventListener('keydown', () => initAudio(), true);
 // held arrow keys steer while they're down
-addEventListener('keyup', e => { if (e.key in REL){ if (REL[e.key] < 0) STEER.keyL = false; else STEER.keyR = false; } });
-addEventListener('blur', () => { STEER.keyL = STEER.keyR = false; STEER.drag = 0; });
+addEventListener('keyup', e => {
+  const d = MODE === 2 ? DUO_KEYS[e.key] : null;
+  if (d){ if (d.a !== 'J') STEERS[d.p]['key' + d.a] = false; }
+  else if (e.key in REL){ if (REL[e.key] < 0) STEER.keyL = false; else STEER.keyR = false; }
+});
+addEventListener('blur', () => { for (const st of STEERS){ st.keyL = st.keyR = false; st.drag = 0; } });
 document.addEventListener('gesturestart', e => e.preventDefault());
 document.addEventListener('dblclick', e => e.preventDefault());
 
 const KEYS = {ArrowRight: 0, d: 0, D: 0, ArrowDown: 1, s: 1, S: 1, ArrowLeft: 2, a: 2, A: 2, ArrowUp: 3, w: 3, W: 3};
 const REL = {ArrowRight: 1, d: 1, D: 1, ArrowLeft: -1, a: -1, A: -1};
+// versus on one keyboard: player 1 is A / D / W, player 2 is ← / → / ↑
+const DUO_KEYS = {a: {p: 0, a: 'L'}, A: {p: 0, a: 'L'}, d: {p: 0, a: 'R'}, D: {p: 0, a: 'R'}, w: {p: 0, a: 'J'}, W: {p: 0, a: 'J'},
+  ArrowLeft: {p: 1, a: 'L'}, ArrowRight: {p: 1, a: 'R'}, ArrowUp: {p: 1, a: 'J'}};
 addEventListener('keydown', e => {
   const k = e.key, onControl = e.target && (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SUMMARY');
   const go = k === ' ' || k === 'Enter';
   const typing = e.target && e.target.tagName === 'INPUT' && e.target.type === 'text' || e.target === $('nameIn');
   if (typing) return;
   if ((k === 'c' || k === 'C') && !e.repeat && !e.metaKey && !e.ctrlKey){ cycleView(); return; }
-  if (state === 'play'){
+  if (state === 'play' && MODE === 2){
+    const d = DUO_KEYS[k];
+    if (d){ e.preventDefault(); if (d.a === 'J'){ if (!e.repeat) jumpFor(d.p); } else STEERS[d.p]['key' + d.a] = true; }
+    else if (k === 'Escape' || k === 'p' || k === 'P') pause();
+    else if (k === ' ' || k === 'ArrowDown') e.preventDefault();
+  } else if (state === 'play'){
     if (view !== 'top' && k in KEYS){ e.preventDefault(); if (k in REL){ if (REL[k] < 0) STEER.keyL = true; else STEER.keyR = true; } }
     else if (k in KEYS){ e.preventDefault(); aimAt(Math.atan2(DIRS[KEYS[k]][1], DIRS[KEYS[k]][0])); }
-    else if (k === ' '){ e.preventDefault(); if (!e.repeat) jump(); }
+    else if (k === ' '){ e.preventDefault(); if (!e.repeat) jumpFor(0); }
     else if (k === 'Escape' || k === 'p' || k === 'P') pause();
   } else if (onControl) {
     return;
   } else if (state === 'menu' && go){ e.preventDefault(); start(stage); }
-  else if (state === 'over' && go){ e.preventDefault(); start(0); }
+  else if (state === 'over' && go){ e.preventDefault(); start(MODE === 2 ? G.idx : 0); }
   else if (state === 'lost' && go){ e.preventDefault(); retryLevel(); }
   else if (state === 'clear' && go){ e.preventDefault(); nextStage(); }
   else if (state === 'paused' && (go || k === 'Escape')){ e.preventDefault(); resume(); }
@@ -1727,10 +2032,12 @@ function frame(now){
   const dt = Math.min(0.05, (now - last)/1000); last = now;
   if (state === 'play'){
     update(dt);
-    const v = [Math.cos(G.th), Math.sin(G.th)], look = 2.4 + G.speed*0.25, k = 1 - Math.exp(-dt*3.2);
-    const lx = PORTRAIT() ? 1.25 : 1, ly = PORTRAIT() ? 1 : 0.8;
-    G.cam.x += (G.x + v[0]*look*lx - G.cam.x)*k;
-    G.cam.y += (G.y + v[1]*look*ly + 0.4 - G.cam.y)*k;
+    if (MODE === 1){
+      const v = [Math.cos(G.th), Math.sin(G.th)], look = 2.4 + G.speed*0.25, k = 1 - Math.exp(-dt*3.2);
+      const lx = PORTRAIT() ? 1.25 : 1, ly = PORTRAIT() ? 1 : 0.8;
+      G.cam.x += (G.x + v[0]*look*lx - G.cam.x)*k;
+      G.cam.y += (G.y + v[1]*look*ly + 0.4 - G.cam.y)*k;
+    }
   } else if (state === 'dying'){
     G.deadT += dt;
     if (G.deadT > 0.9){ if (RUN.lives > 0) showLost(); else showOver(false); }
@@ -1740,7 +2047,8 @@ function frame(now){
   }
   updateParticles(dt);
   G.shake = Math.max(0, G.shake - dt*1.2);
-  G.flash = Math.max(0, G.flash - dt*2.5);
+  for (const p of PL) p.flash = Math.max(0, p.flash - dt*2.5);
+  G.flash = PL[0].flash;
   schedule();
   render(now/1000);
   if (R3 && view !== 'top') R3.render(now/1000, dt);
@@ -1749,6 +2057,8 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 R3 = makeR3();
+if (!R3) MODE = 1;   // versus needs the 3D split screen
+applyModeUI();
 setMuted(muted);
 RUN = newRunState();
 loadStage(stage);
