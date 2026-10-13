@@ -71,6 +71,13 @@ button{touch-action:manipulation}
 .duo-t.hurry{color:var(--pillar)}
 .duo-msg{position:absolute;top:44%;transform:translateX(-50%);font-family:var(--display);font-size:clamp(1.4rem,3vw,2.4rem);text-shadow:0 4px 0 rgba(0,0,0,.4)}
 #duoMsg0{left:25%}#duoMsg1{left:75%}
+.waitbar{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 70px);transform:translateX(-50%);z-index:10;display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:999px;background:var(--panel);border:1px solid var(--ribbon);font-weight:800;font-size:.9rem;white-space:nowrap;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.waitbar i{width:9px;height:9px;border-radius:50%;background:var(--ribbon);animation:blink 1s ease-in-out infinite}
+.waitbar.nudge{animation:nudge .4s ease}
+@keyframes blink{50%{opacity:.25}}
+@keyframes nudge{25%{transform:translateX(calc(-50% - 8px))}75%{transform:translateX(calc(-50% + 8px))}}
+@media (prefers-reduced-motion:reduce){.waitbar i,.waitbar.nudge{animation:none}}
+.btn.waiting{background:rgba(246,239,253,.1);color:var(--muted);box-shadow:none;cursor:default}
 .vs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .vs-p{padding:14px;border-radius:14px;border:1px solid var(--rule);background:rgba(246,239,253,.04);display:grid;gap:4px}
 .vs-p .v{font-family:var(--display);font-size:2rem;line-height:1;font-variant-numeric:tabular-nums}
@@ -233,6 +240,10 @@ button{touch-action:manipulation}
       <div class="seg" style="--n:2" role="radiogroup" aria-labelledby="modeLabel" id="modePick"></div>
       <div class="desc" id="modeDesc"></div>
     </div>
+    <div class="pick" id="oppBox">
+      <div class="eyebrow" id="oppLabel">Opponent</div>
+      <div class="seg" style="--n:2" role="radiogroup" aria-labelledby="oppLabel" id="oppPick"></div>
+    </div>
     <div class="pick">
       <div class="eyebrow" id="stageLabel">Level</div>
       <div class="seg" style="--n:5" role="radiogroup" aria-labelledby="stageLabel" id="stagePick"></div>
@@ -254,7 +265,8 @@ button{touch-action:manipulation}
       <div class="desc" id="viewDesc"></div>
     </div>
     <div class="pick">
-      <div class="eyebrow">Phone controller</div>
+      <div class="eyebrow" id="ctrlLabel">Controls</div>
+      <div class="seg" style="--n:2" role="radiogroup" aria-labelledby="ctrlLabel" id="ctrlPick"></div>
       <div class="phone">
         <div class="qr off" id="qr" aria-hidden="true"></div>
         <div>
@@ -344,11 +356,14 @@ button{touch-action:manipulation}
   <div class="card">
     <div>
       <div class="eyebrow">Paused</div>
-      <h1 class="title">Catch your breath</h1>
+      <h1 class="title" id="pauseTitle">Catch your breath</h1>
+      <div class="desc" id="pauseNote" style="margin-top:10px" hidden></div>
     </div>
     <button class="btn" id="resumeBtn">Resume</button>
   </div>
 </div>
+
+<div class="waitbar" id="waitBar" hidden><i></i><span id="waitTxt">Waiting for a phone</span></div>
 
 <script type="module">
 (async () => {
@@ -377,6 +392,7 @@ const CH = 10;              // chunk size
 const TURN_R = 1.2, TURN_MAX = 5;  // tightest turning circle (cells) and fastest spin (rad/s)
 const PT_GAP = 0.15;        // while curving, drop a trail point this often (cells)
 const SKIP = 0.6, HIT_TAIL = 0.32, R_HEAD = 0.17;
+const SCRAPE_MAX = 0.7;     // walls: hit at a shallower angle than about 45° and you slide along instead of crashing
 const LOW_H = 0.38, TALL_H = 1.7, WALL_H = 1.1, OBL = 0.7;
 const MIN_GEMS = 8, DRAG_PX = 16;
 const BODY_H = 0.3, EYE_H = 0.5;  // 3D: how tall the body stands and where the snake's eyes sit
@@ -453,6 +469,8 @@ const VIEWS = {
 };
 let view = VIEWS[store.get('view')] ? store.get('view') : 'eye';
 let MODE = +store.get('players') === 2 ? 2 : 1;   // 1 = solo, 2 = versus
+let OPP = store.get('opp') === 'cpu' ? 'cpu' : 'friend';   // versus opponent: a friend or the computer
+let CTRL = store.get('ctrl') === 'keys' ? 'keys' : 'phones'; // how people play: phones, or the keyboard and mouse here
 let ARENA = null, WALLS = [];
 
 // ---- screen ----
@@ -537,7 +555,7 @@ const newRunState = () => ({diff, snake, banked: 0, gems: 0, won: false, lastBon
 // The movement, collision and drawing code all work on G, so load() copies one player's fields into G
 // (plus its colors) and save() copies them back. In solo there's just one player and it's always loaded.
 const DUEL_TIME = 60;
-const SNAKE_FIELDS = ['x','y','th','turn','prevTurn','turnCue','aim','sinceP','trail','air','airT','airDur','jumpBuf','tailLen','dist','gems','magCool','cam','flash','noteI'];
+const SNAKE_FIELDS = ['x','y','th','turn','prevTurn','turnCue','aim','sinceP','trail','air','airT','airDur','jumpBuf','tailLen','dist','gems','magCool','cam','flash','noteI','scrapeCue'];
 let PL = [], CUR = null;
 function lookFor(S, color, side){
   const c = rgb(color), base = rgb(S.tiles[0]);
@@ -548,7 +566,7 @@ const P2_COLORS = K => K === SNAKES.magnet ? ['#ffb547', '#c56f1c'] : ['#d6f25c'
 function newPlayer(i, y, look){
   return {i, look, x: 0.5, y, th: 0, turn: 0, prevTurn: 0, turnCue: 0, aim: null, sinceP: 0,
     trail: [{x: -6.5, y, air: false}], air: false, airT: 0, airDur: 1, jumpBuf: 0, tailLen: 7, dist: 0, gems: 0,
-    magCool: 0, cam: {x: 3.5, y}, flash: 0, noteI: 0, lives: LIVES, alive: true, respawnT: 0, grace: 0, cause: ''};
+    magCool: 0, cam: {x: 3.5, y}, flash: 0, noteI: 0, scrapeCue: 0, lives: LIVES, alive: true, respawnT: 0, grace: 0, cause: ''};
 }
 function load(p){
   for (const k of SNAKE_FIELDS) G[k] = p[k];
@@ -671,6 +689,7 @@ const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const clamp1 = v => Math.max(-1, Math.min(1, v));
 function aimAt(angle){ if (state === 'play') G.aim = angle; }
 function steerTarget(i){
+  if (isCPU(i)) return PL[i].aiSteer || 0;
   const st = STEERS[i] || STEER;
   if (performance.now() - st.phoneAt < 450 && Math.abs(st.phone) > 0.01){ G.aim = null; return st.phone; }
   const k = (st.keyR ? 1 : 0) - (st.keyL ? 1 : 0);
@@ -731,18 +750,52 @@ function nearbyChunks(fn){
   const cx = Math.floor(G.x/CH), cy = Math.floor(G.y/CH);
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) if (fn(ensureChunk(cx+i, cy+j)) === false) return;
 }
+// Touching something solid. n is the surface direction pointing back at the head, (px, py) the contact point.
+// Hitting it clearly head-on is a crash; a glancing touch slides the snake along it with a scrape.
+// Returns true if it was a crash.
+function scrape(nx, ny, px, py, cause){
+  const vx = Math.cos(G.th), vy = Math.sin(G.th), into = -(vx*nx + vy*ny);
+  if (into > SCRAPE_MAX){ die(cause); return true; }
+  // drop the part of the heading that points into the surface, and ease a touch away from it
+  const push = Math.max(0, into) + 0.12, th = Math.atan2(vy + ny*push, vx + nx*push);
+  const bent = Math.abs(angDiff(th, G.th)) > 0.05;
+  G.th = th; G.turn *= 0.5;
+  G.x = px + nx*R_HEAD*1.02; G.y = py + ny*R_HEAD*1.02;
+  if (bent || G.sinceP >= PT_GAP) pushPoint();
+  if (G.scrapeCue <= 0){ sfxScrape(); buzz(10); burst(px, py, C.ink, 4, 1.5); G.scrapeCue = 0.25; }
+  return false;
+}
+function touchRect(o, cause){
+  if (!circleRect(G.x, G.y, R_HEAD, o)) return false;
+  let px = Math.max(o.x, Math.min(G.x, o.x + o.w)), py = Math.max(o.y, Math.min(G.y, o.y + o.h));
+  let nx = G.x - px, ny = G.y - py, d = Math.hypot(nx, ny);
+  if (d > 1e-6){ nx /= d; ny /= d; }
+  else {
+    // the head's center is inside the box: push out through the nearest side
+    const L = G.x - o.x, R = o.x + o.w - G.x, T = G.y - o.y, B = o.y + o.h - G.y, m = Math.min(L, R, T, B);
+    nx = m === L ? -1 : m === R ? 1 : 0; ny = nx ? 0 : m === T ? -1 : 1;
+    px = nx < 0 ? o.x : nx > 0 ? o.x + o.w : G.x; py = ny < 0 ? o.y : ny > 0 ? o.y + o.h : G.y;
+  }
+  return scrape(nx, ny, px, py, cause);
+}
+const stillAlive = () => state === 'play' && CUR.alive;
 function collide(){
-  if (G.x - R_HEAD < ARENA.x0 || G.x + R_HEAD > ARENA.x1 || G.y - R_HEAD < ARENA.y0 || G.y + R_HEAD > ARENA.y1) return die('wall');
-  for (const w of G.walls) if (circleRect(G.x, G.y, R_HEAD, w)) return die('wall');
+  // the arena's outer walls
+  if (G.x - R_HEAD < ARENA.x0 && scrape(1, 0, ARENA.x0, G.y, 'wall')) return;
+  if (G.x + R_HEAD > ARENA.x1 && scrape(-1, 0, ARENA.x1, G.y, 'wall')) return;
+  if (G.y - R_HEAD < ARENA.y0 && scrape(0, 1, G.x, ARENA.y0, 'wall')) return;
+  if (G.y + R_HEAD > ARENA.y1 && scrape(0, -1, G.x, ARENA.y1, 'wall')) return;
+  for (const w of G.walls) if (touchRect(w, 'wall')) return;
+  let crashed = false;
   nearbyChunks(c => {
     for (const o of c.obs){
-      if (!circleRect(G.x, G.y, R_HEAD, o)) continue;
-      if (o.tall && !(G.air && G.K.overPillars)){ die('pillar'); return false; }
-      if (!o.tall && !G.air){ die('hurdle'); return false; }
+      if (o.tall && !(G.air && G.K.overPillars)){ if (touchRect(o, 'pillar')){ crashed = true; return false; } }
+      else if (!o.tall && !G.air){ if (touchRect(o, 'hurdle')){ crashed = true; return false; } }
     }
     for (const g of c.gems)
       if (!g.taken && state === 'play' && Math.hypot(g.x-G.x, g.y-G.y) < 0.62) eat(g);
   });
+  if (crashed || !stillAlive()) return;
   if (MODE === 2 && state === 'play' && CUR.alive && !G.air && CUR.grace <= 0) for (const q of PL){
     if (q === CUR || !q.alive) continue;
     // head to head knocks out both; hitting the other snake's body only knocks out you
@@ -794,9 +847,11 @@ function update(dt){
     if (!p.alive){ if (MODE === 2 && p.lives > 0 && (p.respawnT -= dt) <= 0) respawn(p); continue; }
     load(p);
     if (p.grace > 0) p.grace -= dt;
+    G.scrapeCue -= dt;
     if (G.magCool > 0 && (G.magCool -= dt) <= 0) sfxRecharged();
     if (G.K.magnet) pullGems(dt);
     // ease toward the requested steering so sensor jitter doesn't twitch the snake
+    if (isCPU(p.i)) aiThink(p, dt);
     G.turn += (steerTarget(p.i) - G.turn)*(1 - Math.exp(-dt*12));
     G.turnCue -= dt;
     // starting a turn still plays the next note of the melody, like the original
@@ -812,6 +867,108 @@ function update(dt){
     if (G.left <= 0 || PL.every(p => !p.alive && p.lives <= 0)) endDuel();
   }
 }
+// ---- computer opponent (versus) ----
+// Every few hundredths of a second it picks the nearest gem (favoring ones ahead), fans out nine
+// feelers in front of it, and steers along the one that's both clear and closest to the gem.
+// Hurdles dead ahead get jumped. Difficulty changes how far it looks, how fast it reacts and how sloppy it is.
+const isCPU = i => MODE === 2 && OPP === 'cpu' && i === 1;
+const AI_SKILL = {easy: {look: 2.2, think: 0.22, wobble: 0.5}, normal: {look: 3, think: 0.13, wobble: 0.25}, hard: {look: 3.8, think: 0.07, wobble: 0.08}};
+function aiNear(x, y, fn){
+  const cx = Math.floor(x/CH), cy = Math.floor(y/CH);
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) if (fn(ensureChunk(cx + i, cy + j))) return true;
+  return false;
+}
+function aiBlocked(x, y, self){
+  const m = 0.45, hit = o => x > o.x - m && x < o.x + o.w + m && y > o.y - m && y < o.y + o.h + m;
+  if (x < ARENA.x0 + m || x > ARENA.x1 - m || y < ARENA.y0 + m || y > ARENA.y1 - m) return true;
+  if (G.walls.some(hit)) return true;
+  if (aiNear(x, y, c => c.obs.some(o => o.tall && hit(o)))) return true;
+  for (const q of PL){
+    if (!q.alive) continue;
+    const T = q.trail, hx = q === self ? G.x : q.x, hy = q === self ? G.y : q.y;
+    let acc = 0, bx = hx, by = hy;
+    for (let i = T.length - 1; i >= 0; i--){
+      const a = T[i], L = Math.hypot(bx - a.x, by - a.y);
+      // ignore its own neck, which it can't hit anyway
+      if (!a.air && (q !== self || acc > 1.4) && distSeg(x, y, a.x, a.y, bx, by) < 0.5) return true;
+      acc += L; bx = a.x; by = a.y;
+    }
+    if (q !== self && Math.hypot(x - hx, y - hy) < 0.8) return true;
+  }
+  return false;
+}
+function aiThink(p, dt){
+  if ((p.aiT = (p.aiT || 0) - dt) > 0) return;
+  const sk = AI_SKILL[RUN.diff] || AI_SKILL.normal;
+  p.aiT = sk.think;
+  let tgt = G.th, best = Infinity;
+  for (const c of G.chunks.values()) for (const g of c.gems){
+    if (g.taken) continue;
+    const a = Math.atan2(g.y - G.y, g.x - G.x), d = Math.hypot(g.x - G.x, g.y - G.y)*(1.5 - 0.5*Math.cos(angDiff(a, G.th)));
+    if (d < best){ best = d; tgt = a; }
+  }
+  const L = sk.look + G.speed*0.25;
+  let pick = G.th, top = -Infinity;
+  for (let k = -4; k <= 4; k++){
+    const a = G.th + k*0.32;
+    let free = L;
+    for (let s = 0.5; s <= L; s += 0.4) if (aiBlocked(G.x + Math.cos(a)*s, G.y + Math.sin(a)*s, p)){ free = s; break; }
+    const score = free/L*4 - Math.abs(angDiff(a, tgt))*0.9 - Math.abs(k)*0.08 + (Math.random() - 0.5)*sk.wobble;
+    if (score > top){ top = score; pick = a; }
+  }
+  p.aiSteer = clamp1(angDiff(pick, G.th)*2.2);
+  if (!G.air){
+    for (let s = 0.35; s <= 0.9 + G.speed*0.08; s += 0.2){
+      const x = G.x + Math.cos(G.th)*s, y = G.y + Math.sin(G.th)*s;
+      if (aiNear(x, y, c => c.obs.some(o => !o.tall && circleRect(x, y, 0.2, o)))){ jump(); break; }
+    }
+  }
+}
+// what to call each player on screen
+const playerName = i => MODE === 2 && OPP === 'cpu' ? (i === 0 ? 'You' : 'Computer') : `Player ${i + 1}`;
+
+// ---- making sure everyone has a controller before play starts ----
+const humans = () => MODE === 2 && OPP === 'friend' ? 2 : 1;
+function missingPhones(){
+  if (CTRL !== 'phones') return [];
+  const m = [];
+  for (let i = 0; i < humans(); i++) if (!phoneOn(i)) m.push(i);
+  return m;
+}
+const readyToPlay = () => missingPhones().length === 0;
+function waitingText(){
+  const m = missingPhones();
+  if (!m.length) return '';
+  const who = humans() === 1 ? 'a phone' : m.length === 2 ? 'both phones' : `Player ${m[0] + 1}'s phone`;
+  return `Waiting for ${who}` + (PHONE.code ? ` · code ${PHONE.code}` : '');
+}
+function nudgeWaiting(){
+  const b = $('waitBar'); b.classList.remove('nudge'); void b.offsetWidth; b.classList.add('nudge');
+  phoneSend({t: 'buzz', p: [20, 40, 20]});
+}
+let lastWait = null, lastLive = '';
+function updateWait(){
+  // phones coming and going (including going quiet) update the chip, and a missing one pauses play
+  const live = phoneOn(0) + ',' + phoneOn(1);
+  if (live !== lastLive){ lastLive = live; setPhoneUI(); }
+  const txt = waitingText();
+  if (txt && state === 'play') pause();
+  const show = !!txt && state !== 'play' && state !== 'dying' && $('menu').hidden;
+  const key = show + txt;
+  if (key === lastWait) return;
+  lastWait = key;
+  $('waitBar').hidden = !show; $('waitTxt').textContent = txt;
+  if (state === 'menu' || !$('menu').hidden) updateMenuUI();
+  if (state === 'paused') updatePauseNote();
+}
+function updatePauseNote(){
+  const txt = waitingText();
+  $('pauseTitle').textContent = txt ? 'Phone disconnected' : 'Catch your breath';
+  $('pauseNote').hidden = !txt;
+  $('pauseNote').textContent = txt ? txt.replace('Waiting for', 'Reconnect') + '. The game picks up once it’s back.' : '';
+  $('resumeBtn').classList.toggle('waiting', !!txt);
+}
+
 // versus: a crash costs a life and the snake reappears somewhere clear a moment later
 function dieP(p, cause){
   if (!p.alive) return;
@@ -1031,6 +1188,7 @@ function leadNote(f, t, peak, dcy){
 }
 function sfxTurn(){ const m = style().melody, f = mf(m[G.noteI++ % m.length]); sfx(t => { leadNote(f, t, 0.22, 0.32); tone('sine', f*2, t, 0.04, 0.2, sfxBus); }); }
 function sfxJump(){ sfx(t => tone('sine', 320, t, 0.22, 0.18*Math.sqrt(G.K.jump), sfxBus, 780)); }
+function sfxScrape(){ sfx(t => { noise(t, 'bandpass', 2600, 0.14, 0.08, sfxBus); tone('triangle', 520, t, 0.04, 0.06, sfxBus, 380); }); }
 function sfxLand(){ sfx(t => tone('sine', 150, t, 0.25, 0.1, sfxBus, 70)); }
 function sfxGem(){ sfx(t => { tone('square', 1318.5, t, 0.06, 0.1, sfxBus, 0, 4000); tone('square', 1760, t+0.07, 0.06, 0.2, sfxBus, 0, 4000); }); }
 function sfxRecharged(){ sfx(t => { tone('sine', 880, t, 0.06, 0.08, sfxBus); tone('sine', 1320, t + 0.06, 0.06, 0.12, sfxBus); }); }
@@ -1541,11 +1699,14 @@ function makeR3(){
 // the two talk directly over WebRTC. Phone sends {t:'steer',v}, {t:'jump'}, {t:'go'}, {t:'pause'}, {t:'view'}, {t:'name'};
 // the game sends back {t:'state',...} for the phone's screen and {t:'buzz',p} for haptics.
 // Up to two phones can join the same code: the first is player 1, the second player 2.
-const PHONE = {peer: null, conns: [null, null], code: ''};
+const PHONE = {peer: null, conns: [null, null], seen: [0, 0], code: ''};
+// a phone that's been silent this long (locked, pocketed, tab closed) counts as gone; live phones send several messages a second
+const PHONE_QUIET_MS = 3000;
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const newCode = () => Array.from({length: 4}, () => CODE_CHARS[Math.floor(Math.random()*CODE_CHARS.length)]).join('');
 const controllerURL = code => { const u = new URL('controller.html', location.href); u.hash = code; return u.href; };
-const phoneOn = i => i === undefined ? PHONE.conns.some(c => c && c.open) : !!(PHONE.conns[i] && PHONE.conns[i].open);
+const phoneLive = i => !!(PHONE.conns[i] && PHONE.conns[i].open && performance.now() - PHONE.seen[i] < PHONE_QUIET_MS);
+const phoneOn = i => i === undefined ? phoneLive(0) || phoneLive(1) : phoneLive(i);
 function phoneSend(msg, only){
   PHONE.conns.forEach((c, i) => { if (c && c.open && (only === undefined || only === i)) try { c.send(msg); } catch(_) {} });
 }
@@ -1555,8 +1716,10 @@ function setPhoneUI(note){
   $('phoneChipTxt').textContent = both ? '2 phones connected' : on ? 'Phone connected' : PHONE.code ? 'Phone code ' + PHONE.code : 'No phone';
   $('phoneCode').textContent = PHONE.code || '····';
   if (note) { $('phoneDesc').textContent = note; return; }
+  if (CTRL === 'keys' && !on) { $('phoneDesc').innerHTML = 'Playing on the keyboard. A phone can still join with this code.'; return; }
+  if (MODE === 2 && OPP === 'cpu' && on) { $('phoneDesc').innerHTML = '<b>Phone connected.</b> You against the computer.'; return; }
   if (MODE === 2 && both) { $('phoneDesc').innerHTML = '<b>Both phones connected.</b> Ready to race.'; return; }
-  if (MODE === 2 && on) { $('phoneDesc').innerHTML = `<b>Player ${phoneOn(0) ? 1 : 2} is connected.</b> Player ${phoneOn(0) ? 2 : 1}: scan the same code.`; return; }
+  if (MODE === 2 && OPP === 'friend' && on) { $('phoneDesc').innerHTML = `<b>Player ${phoneOn(0) ? 1 : 2} is connected.</b> Player ${phoneOn(0) ? 2 : 1}: scan the same code.`; return; }
   if (on) { $('phoneDesc').innerHTML = '<b>Phone connected.</b> Tilt to steer, jump to jump.'; return; }
   const url = controllerURL(PHONE.code);
   $('phoneDesc').innerHTML = location.protocol === 'file:'
@@ -1581,13 +1744,19 @@ function startPhoneLink(){
       let slot = -1;
       conn.on('open', () => {
         // take the first free seat; a third phone is politely turned away
-        slot = PHONE.conns.findIndex(c => !c || !c.open);
+        // (a seat whose phone went quiet can be reclaimed, e.g. by the same phone after a reload)
+        slot = [0, 1].find(i => !phoneLive(i)) ?? -1;
         if (slot < 0){ try { conn.send({t: 'full'}); } catch(_) {} setTimeout(() => conn.close(), 300); return; }
-        PHONE.conns[slot] = conn; setPhoneUI(); lastPhone[slot] = ''; syncPhone(true);
+        const old = PHONE.conns[slot];
+        if (old && old !== conn) try { old.close(); } catch(_) {}
+        PHONE.conns[slot] = conn; PHONE.seen[slot] = performance.now(); setPhoneUI(); lastPhone[slot] = ''; syncPhone(true);
         phoneSend({t: 'buzz', p: 30}, slot);
       });
-      conn.on('data', m => { if (slot >= 0) onPhone(m, slot); });
-      conn.on('close', () => { if (slot >= 0 && PHONE.conns[slot] === conn){ PHONE.conns[slot] = null; setPhoneUI(); } });
+      conn.on('data', m => { if (slot >= 0 && PHONE.conns[slot] === conn){ PHONE.seen[slot] = performance.now(); onPhone(m, slot); } });
+      conn.on('close', () => {
+        if (slot < 0 || PHONE.conns[slot] !== conn) return;
+        PHONE.conns[slot] = null; setPhoneUI();
+      });
     });
     peer.on('error', err => {
       if (err.type === 'unavailable-id'){
@@ -1623,8 +1792,11 @@ function onPhone(m, slot){
 const lastPhone = ['', ''];
 function syncPhone(force){
   if (!phoneOn() || !G) return;
-  const go = {menu: MODE === 2 ? 'Start the race' : `Start level ${stage + 1}`, over: MODE === 2 ? 'Rematch' : 'New run',
+  let go = {menu: MODE === 2 ? 'Start the race' : `Start level ${stage + 1}`, over: MODE === 2 ? 'Rematch' : 'New run',
     lost: `Restart level ${G.idx + 1}`, clear: `Start level ${G.idx + 2}`, paused: 'Resume'}[state] || '';
+  // while someone's phone is missing, the phones' Start button says who the game is waiting for
+  const wait = waitingText();
+  if (go && wait && state !== 'paused') go = wait.split(' · ')[0] + '…';
   const ask = MODE === 1 && pending ? {rank: rankFor(pending.diff, pending.score) + 1, score: pending.score, name: store.get('name') || ''} : null;
   PHONE.conns.forEach((c, slot) => {
     if (!c || !c.open) return;
@@ -1660,6 +1832,7 @@ function updateHUD(){
     PL.forEach((p, i) => {
       const el = $('duo' + i);
       $('duoTag' + i).style.background = p.look.color;
+      $('duoTag' + i).textContent = isCPU(i) ? 'CPU' : OPP === 'cpu' && MODE === 2 ? 'You' : 'P' + (i + 1);
       el.querySelector('.sc').textContent = pScore(p);
       el.querySelector('.hearts').innerHTML = heartsHTML(p.lives);
       $('duoMsg' + i).textContent = state !== 'play' || p.alive ? '' : p.lives > 0 ? 'Respawning…' : 'Out of lives';
@@ -1710,6 +1883,12 @@ function setMode(m){
   if (MODE === 2 && view === 'top') setView('chase');
   applyModeUI(); setPhoneUI(); refreshMenu(); resize();
 }
+buildSeg('oppPick', 'opp', [{value: 'friend', html: '<b>Friend</b><small>2 phones</small>'}, {value: 'cpu', html: '<b>Computer</b><small>Solo vs AI</small>'}], v => {
+  OPP = v; store.set('opp', v); setPhoneUI(); applyModeUI(); refreshMenu();
+});
+buildSeg('ctrlPick', 'ctrl', [{value: 'phones', html: '<b>Phones</b><small>Tilt + jump</small>'}, {value: 'keys', html: '<b>Keyboard</b><small>On this screen</small>'}], v => {
+  CTRL = v; store.set('ctrl', v); setPhoneUI(); refreshMenu();
+});
 buildSeg('stagePick', 'stage', STAGES.map((S, i) => ({value: i, html: `<b class="num">${i + 1}</b>${LOCK}`})), v => {
   stage = +v; store.set('stage', stage); refreshMenu();
 });
@@ -1754,7 +1933,7 @@ function updateMenuUI(){
   $('diff-' + diff).checked = true;
   $('mode-' + MODE).checked = true;
   $('modeDesc').innerHTML = MODE === 2
-    ? '<b>Versus.</b> Two snakes, one arena, 60 seconds. Race for the same gems. Crash into anything, including each other, and you lose a life and respawn. Highest score wins.'
+    ? '<b>Versus.</b> Two snakes, one arena, 60 seconds. Race for the same gems. Crash into anything, including each other, and you lose a life and respawn. Highest score wins. No second player? Pick the computer.'
     : '<b>Solo.</b> Clear each level’s gem goal to unlock the next.';
   for (const k in VIEWS){
     const inp = $('view-' + k), off = (!R3 && k !== 'top') || (MODE === 2 && k === 'top');
@@ -1772,7 +1951,11 @@ function updateMenuUI(){
   $('menuBoardLabel').textContent = DIFFS[diff].name;
   renderBoard($('menuBoard'), diff, lastEntry);
   for (const k in bests) $('best-' + k).textContent = 'Best ' + bests[k];
-  $('startBtn').textContent = MODE === 2 ? `Start versus · level ${stage + 1}` : `Start level ${stage + 1}`;
+  const wait = waitingText();
+  $('startBtn').textContent = wait ? wait.split(' · ')[0] + '…' : MODE === 2 ? `Start versus · level ${stage + 1}` : `Start level ${stage + 1}`;
+  $('startBtn').classList.toggle('waiting', !!wait);
+  $('oppBox').hidden = MODE !== 2;
+  $('opp-' + OPP).checked = true; $('ctrl-' + CTRL).checked = true;
   $('snakeLabel').textContent = MODE === 2 ? 'Snake (both players)' : 'Snake';
 }
 // show the chosen level and snake behind the menu
@@ -1785,12 +1968,13 @@ function showDuel(){
   const sc = PL.map(pScore), timeUp = G.left <= 0;
   const w = sc[0] === sc[1] ? -1 : sc[0] > sc[1] ? 0 : 1;
   $('duelEyebrow').textContent = timeUp ? "Time's up" : 'Both snakes are out of lives';
-  $('duelTitle').textContent = w < 0 ? "It's a tie" : `Player ${w + 1} wins`;
+  $('duelTitle').textContent = w < 0 ? "It's a tie" : OPP === 'cpu' && MODE === 2 ? (w === 0 ? 'You win' : 'The computer wins') : `Player ${w + 1} wins`;
   $('duelTitle').style.color = w < 0 ? '' : PL[w].look.color;
   $('duelTitle').style.textShadow = w < 0 ? '' : `0 4px 0 ${PL[w].look.side}`;
   PL.forEach((p, i) => {
     const el = $('vs' + i);
     el.querySelector('.v').textContent = sc[i];
+    el.querySelector('.eyebrow').textContent = playerName(i);
     el.querySelector('small').textContent = `${p.gems} ${p.gems === 1 ? 'gem' : 'gems'} · ${p.lives} ${p.lives === 1 ? 'life' : 'lives'} left`;
     el.style.color = p.look.color; el.classList.toggle('win', i === w);
     el.querySelector('.v').style.color = 'var(--ink)';
@@ -1812,6 +1996,7 @@ function showLost(){
 }
 function retryLevel(){
   if (state !== 'lost') return;
+  if (!readyToPlay()) return nudgeWaiting();
   initAudio();
   loadStage(G.idx);
   begin();
@@ -1903,6 +2088,7 @@ function begin(){
   startMusic(); keepAwake(true);
 }
 function start(idx){
+  if (!readyToPlay()) return nudgeWaiting();
   if (pending) saveName('');
   initAudio();
   RUN = newRunState();
@@ -1912,6 +2098,7 @@ function start(idx){
 }
 function nextStage(){
   if (state !== 'clear' || !G.cardShown) return;
+  if (!readyToPlay()) return nudgeWaiting();
   initAudio();
   loadStage(G.idx + 1);
   begin();
@@ -1928,10 +2115,12 @@ function pause(){
   if (state !== 'play') return;
   state = 'paused'; stopMusic(); pointers.clear(); for (const st of STEERS) st.drag = 0; keepAwake(false);
   $('pause').hidden = false; $('pauseBtn').hidden = true;
+  updatePauseNote();
   $('resumeBtn').focus({preventScroll: true});
 }
 function resume(){
   if (state !== 'paused') return;
+  if (!readyToPlay()) return nudgeWaiting();
   initAudio();
   begin();
 }
@@ -1988,7 +2177,7 @@ addEventListener('pointerdown', () => initAudio(), true);
 addEventListener('keydown', () => initAudio(), true);
 // held arrow keys steer while they're down
 addEventListener('keyup', e => {
-  const d = MODE === 2 ? DUO_KEYS[e.key] : null;
+  const d = MODE === 2 && OPP === 'friend' ? DUO_KEYS[e.key] : null;
   if (d){ if (d.a !== 'J') STEERS[d.p]['key' + d.a] = false; }
   else if (e.key in REL){ if (REL[e.key] < 0) STEER.keyL = false; else STEER.keyR = false; }
 });
@@ -2007,7 +2196,7 @@ addEventListener('keydown', e => {
   const typing = e.target && e.target.tagName === 'INPUT' && e.target.type === 'text' || e.target === $('nameIn');
   if (typing) return;
   if ((k === 'c' || k === 'C') && !e.repeat && !e.metaKey && !e.ctrlKey){ cycleView(); return; }
-  if (state === 'play' && MODE === 2){
+  if (state === 'play' && MODE === 2 && OPP === 'friend'){
     const d = DUO_KEYS[k];
     if (d){ e.preventDefault(); if (d.a === 'J'){ if (!e.repeat) jumpFor(d.p); } else STEERS[d.p]['key' + d.a] = true; }
     else if (k === 'Escape' || k === 'p' || k === 'P') pause();
@@ -2053,6 +2242,7 @@ function frame(now){
   render(now/1000);
   if (R3 && view !== 'top') R3.render(now/1000, dt);
   updateHUD();
+  updateWait();
   syncPhone();
   requestAnimationFrame(frame);
 }
