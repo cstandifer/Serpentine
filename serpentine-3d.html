@@ -168,7 +168,7 @@ button{touch-action:manipulation}
     <details class="how" id="how">
       <summary>How to play</summary>
       <ul class="rules">
-        <li><span class="glyph"><svg viewBox="0 0 26 26" style="fill:none;stroke:var(--ribbon);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round"><path d="M4 20h9V7"/><path d="M9 11l4-4 4 4"/></svg></span><span><b>Tilt your phone</b> left or right to turn, the way the snake is facing. No phone? Arrow keys or a sideways drag.</span></li>
+        <li><span class="glyph"><svg viewBox="0 0 26 26" style="fill:none;stroke:var(--ribbon);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round"><path d="M4 20h9V7"/><path d="M9 11l4-4 4 4"/></svg></span><span><b>Tilt your phone</b> to steer: a little for a gentle curve, more for a tight one. No phone? Hold the arrow keys or drag sideways.</span></li>
         <li><span class="glyph"><svg viewBox="0 0 26 26"><rect x="5" y="9" width="16" height="6" style="fill:var(--hurdle)"/><rect x="5" y="15" width="16" height="4" style="fill:var(--hurdle-side)"/></svg></span><span><b>Jump</b> (for real, holding the phone) to clear low teal hurdles. Space or a tap works too.</span></li>
         <li><span class="glyph"><svg viewBox="0 0 26 26"><rect x="8" y="3" width="10" height="8" style="fill:var(--pillar)"/><rect x="8" y="11" width="10" height="12" style="fill:var(--pillar-side)"/></svg></span><span>Rose pillars are too tall to jump. <b>Steer around them.</b></span></li>
         <li><span class="glyph"><svg viewBox="0 0 26 26"><rect x="3" y="6" width="20" height="6" style="fill:var(--wall)"/><rect x="3" y="12" width="20" height="7" style="fill:var(--wall-side)"/><rect x="9" y="6" width="1.5" height="6" style="fill:var(--wall-side)"/><rect x="16" y="6" width="1.5" height="6" style="fill:var(--wall-side)"/></svg></span><span>Walls can’t be jumped by any snake.</span></li>
@@ -208,7 +208,7 @@ button{touch-action:manipulation}
       </div>
     </div>
     <button class="btn" id="startBtn">Start level 1</button>
-    <div class="hint"><span class="hint-kb">Keyboard: ← → turn, Space jumps, C changes view</span><span class="hint-touch">Drag sideways to turn, tap to jump</span></div>
+    <div class="hint"><span class="hint-kb">Keyboard: hold ← → to steer, Space jumps, C changes view</span><span class="hint-touch">Drag sideways to turn, tap to jump</span></div>
   </div>
 </div>
 
@@ -292,7 +292,8 @@ const mf = m => 440*Math.pow(2, (m - 69)/12);
 const DIRS = [[1,0],[0,1],[-1,0],[0,-1]];
 const LINE_W = 0.42, RIB_H = 0.14, HEAD = 0.52;
 const CH = 10;              // chunk size
-const MIN_GAP = 0.56;       // min straight run between turns
+const TURN_R = 1.2, TURN_MAX = 5;  // tightest turning circle (cells) and fastest spin (rad/s)
+const PT_GAP = 0.15;        // while curving, drop a trail point this often (cells)
 const SKIP = 0.6, HIT_TAIL = 0.32, R_HEAD = 0.17;
 const LOW_H = 0.38, TALL_H = 1.7, WALL_H = 1.1, OBL = 0.7;
 const MIN_GEMS = 8, DRAG_PX = 16;
@@ -452,8 +453,8 @@ function loadStage(idx){
   G = {
     idx, S, D, K,
     seed: (Math.random()*1e9)|0, chunks: new Map(), walls: [],
-    x: 0.5, y: 0.5, dir: 0, trail: [], air: false, airT: 0, airDur: 1, jumpBuf: 0,
-    sinceTurn: 9, queue: [], tailLen: 7, base, speed: base, max: D.max + idx*0.3,
+    x: 0.5, y: 0.5, th: 0, turn: 0, prevTurn: 0, turnCue: 0, aim: null, sinceP: 0, trail: [], air: false, airT: 0, airDur: 1, jumpBuf: 0,
+    tailLen: 7, base, speed: base, max: D.max + idx*0.3,
     t: 0, dist: 0, gems: 0, done: false, clearT: 0, magCool: 0,
     cam: {x: 3.5, y: 0.5}, particles: [], shake: 0, deadT: 0, cause: '', noteI: 0, flash: 0
   };
@@ -542,18 +543,26 @@ function pushPoint(){
   const l = G.trail[G.trail.length-1];
   if (Math.abs(l.x-G.x) < 1e-6 && Math.abs(l.y-G.y) < 1e-6) { l.air = G.air; return; }
   G.trail.push({x: G.x, y: G.y, air: G.air});
+  G.sinceP = 0;
 }
-function requestTurn(dir){
-  if (state !== 'play') return;
-  const cur = G.queue.length ? G.queue[G.queue.length-1] : G.dir;
-  if (dir === cur || (dir+2)%4 === cur || G.queue.length >= 2) return;
-  G.queue.push(dir);
-}
-// turn left (-1) or right (+1) relative to where the snake is heading (3D views and the phone)
-function turnRel(d){
-  if (state !== 'play') return;
-  const cur = G.queue.length ? G.queue[G.queue.length-1] : G.dir;
-  requestTurn((cur + d + 4) % 4);
+// Steering is analog: -1 is a hard left, +1 a hard right, 0 straight, relative to where the snake faces.
+// It comes from the phone's tilt, held arrow keys, or a sideways drag. In the top view, arrow keys and
+// drags instead point the snake at a compass heading (G.aim) and it curves round to face it.
+const STEER = {keyL: false, keyR: false, drag: 0, phone: 0, phoneAt: -1e9};
+const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+const clamp1 = v => Math.max(-1, Math.min(1, v));
+function aimAt(angle){ if (state === 'play') G.aim = angle; }
+function steerTarget(){
+  if (performance.now() - STEER.phoneAt < 450 && Math.abs(STEER.phone) > 0.01){ G.aim = null; return STEER.phone; }
+  const k = (STEER.keyR ? 1 : 0) - (STEER.keyL ? 1 : 0);
+  if (k){ G.aim = null; return k; }
+  if (STEER.drag){ G.aim = null; return STEER.drag; }
+  if (G.aim !== null){
+    const d = angDiff(G.aim, G.th);
+    if (Math.abs(d) < 0.02){ G.th = G.aim; G.aim = null; G.turn = 0; return 0; }
+    return clamp1(d*2.5);
+  }
+  return 0;
 }
 function jump(){
   if (state !== 'play') return;
@@ -564,10 +573,10 @@ function jump(){
 function trim(){
   const T = G.trail;
   let total = 0;
-  for (let i = 0; i < T.length; i++){ const a = T[i], b = T[i+1] || G; total += Math.abs(b.x-a.x) + Math.abs(b.y-a.y); }
+  for (let i = 0; i < T.length; i++){ const a = T[i], b = T[i+1] || G; total += Math.hypot(b.x-a.x, b.y-a.y); }
   let excess = total - G.tailLen;
   while (excess > 0 && T.length){
-    const a = T[0], b = T[1] || G, L = Math.abs(b.x-a.x) + Math.abs(b.y-a.y);
+    const a = T[0], b = T[1] || G, L = Math.hypot(b.x-a.x, b.y-a.y);
     if (T.length > 1 && L <= excess) { T.shift(); excess -= L; }
     else { const f = Math.min(1, excess/(L||1)); a.x += (b.x-a.x)*f; a.y += (b.y-a.y)*f; excess = 0; }
   }
@@ -580,7 +589,7 @@ function distSeg(px,py,ax,ay,bx,by){
 function hitsTail(){
   const T = G.trail; let acc = 0, bx = G.x, by = G.y;
   for (let i = T.length-1; i >= 0; i--){
-    const a = T[i], L = Math.abs(bx-a.x) + Math.abs(by-a.y);
+    const a = T[i], L = Math.hypot(bx-a.x, by-a.y);
     if (acc + L > SKIP && !a.air){
       const f = L > 0 ? (L - Math.max(0, SKIP-acc))/L : 0;
       if (distSeg(G.x, G.y, a.x, a.y, a.x+(bx-a.x)*f, a.y+(by-a.y)*f) < HIT_TAIL) return true;
@@ -623,9 +632,11 @@ function pullGems(dt){
   });
 }
 function step(d, dt){
-  if (G.queue.length && G.sinceTurn >= MIN_GAP){ G.dir = G.queue.shift(); pushPoint(); G.sinceTurn = 0; sfxTurn(); buzz(6); }
-  const v = DIRS[G.dir];
-  G.x += v[0]*d; G.y += v[1]*d; G.sinceTurn += d; G.dist += d;
+  // turn rate scales with speed so the tightest curve keeps the same radius as you speed up
+  G.th += Math.min(TURN_MAX, G.speed/TURN_R)*G.turn*dt;
+  G.x += Math.cos(G.th)*d; G.y += Math.sin(G.th)*d; G.dist += d;
+  G.sinceP += d;
+  if (G.sinceP >= PT_GAP && Math.abs(G.turn) > 0.01) pushPoint();
   if (G.jumpBuf > 0) G.jumpBuf -= dt;
   if (G.air){
     G.airT += dt;
@@ -642,6 +653,12 @@ function update(dt){
   G.speed = Math.min(G.max, G.base + G.t*G.D.ramp);
   if (G.magCool > 0 && (G.magCool -= dt) <= 0) sfxRecharged();
   if (G.K.magnet) pullGems(dt);
+  // ease toward the requested steering so sensor jitter doesn't twitch the snake
+  G.turn += (steerTarget() - G.turn)*(1 - Math.exp(-dt*12));
+  G.turnCue -= dt;
+  // starting a turn still plays the next note of the melody, like the original
+  if (Math.abs(G.turn) > 0.35 && (Math.abs(G.prevTurn) <= 0.35 || Math.sign(G.turn) !== Math.sign(G.prevTurn)) && G.turnCue <= 0){ sfxTurn(); buzz(6); G.turnCue = 0.3; }
+  G.prevTurn = G.turn;
   let remain = G.speed*dt;
   while (remain > 0 && state === 'play'){ const d = Math.min(0.08, remain); remain -= d; step(d, d/G.speed); }
 }
@@ -845,13 +862,14 @@ function drawRibbon(){
   const T = G.trail; if (!T.length) return;
   const segs = []; let total = 0;
   for (let i = 0; i < T.length; i++){
-    const a = T[i], b = T[i+1] || G, L = Math.abs(b.x-a.x) + Math.abs(b.y-a.y);
+    const a = T[i], b = T[i+1] || G, L = Math.hypot(b.x-a.x, b.y-a.y);
     segs.push({a, b, L, s: total}); total += L;
   }
-  const hw = LINE_W/2, lift = RIB_H*SCALE*OBL;
-  ctx.fillStyle = C['ribbon-side'];
-  for (const s of segs) if (!s.a.air && s.L > 0)
-    rectW(Math.min(s.a.x, s.b.x) - hw, Math.min(s.a.y, s.b.y) - hw, Math.abs(s.b.x-s.a.x) + LINE_W, Math.abs(s.b.y-s.a.y) + LINE_W, 0);
+  const lift = RIB_H*SCALE*OBL;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = LINE_W*SCALE;
+  const seg = (ax, ay, bx, by, up) => { const [x0, y0] = w2s(ax, ay), [x1, y1] = w2s(bx, by); ctx.beginPath(); ctx.moveTo(x0, y0 - up); ctx.lineTo(x1, y1 - up); ctx.stroke(); };
+  ctx.strokeStyle = C['ribbon-side'];
+  for (const s of segs) if (!s.a.air && s.L > 0) seg(s.a.x, s.a.y, s.b.x, s.b.y, 0);
   for (const s of segs){
     if (s.L <= 0) continue;
     if (s.a.air){
@@ -866,11 +884,9 @@ function drawRibbon(){
     const pieces = Math.max(1, Math.ceil(s.L/0.5));
     for (let p = 0; p < pieces; p++){
       const f0 = p/pieces, f1 = (p+1)/pieces;
-      const ax = s.a.x + (s.b.x-s.a.x)*f0, ay = s.a.y + (s.b.y-s.a.y)*f0;
-      const bx = s.a.x + (s.b.x-s.a.x)*f1, by = s.a.y + (s.b.y-s.a.y)*f1;
       const frac = (s.s + s.L*(f0+f1)/2) / (total || 1);
-      ctx.fillStyle = RIB[Math.min(RIB.length-1, Math.floor(frac*RIB.length))];
-      rectW(Math.min(ax,bx) - hw, Math.min(ay,by) - hw, Math.abs(bx-ax) + LINE_W, Math.abs(by-ay) + LINE_W, lift);
+      ctx.strokeStyle = RIB[Math.min(RIB.length-1, Math.floor(frac*RIB.length))];
+      seg(s.a.x + (s.b.x-s.a.x)*f0, s.a.y + (s.b.y-s.a.y)*f0, s.a.x + (s.b.x-s.a.x)*f1, s.a.y + (s.b.y-s.a.y)*f1, lift);
     }
   }
 }
@@ -921,7 +937,7 @@ function drawGem(g, t){
   ctx.closePath(); ctx.fill();
 }
 function headPath(cx, cy, size, shape){
-  const v = DIRS[G.dir], px = -v[1], py = v[0];
+  const v = [Math.cos(G.th), Math.sin(G.th)], px = -v[1], py = v[0];
   const P = (a, b) => [cx + (v[0]*a + px*b)*size, cy + (v[1]*a + py*b)*size];
   ctx.beginPath();
   if (shape === 'arrow'){
@@ -946,7 +962,7 @@ function drawHead(beat){
   ctx.drawImage(GLOW_RIB, hx - gs/2, cy - gs/2, gs, gs);
   ctx.fillStyle = dead && Math.floor(G.deadT*12) % 2 ? C.ink : C.ribbon;
   headPath(hx, cy, size, K.shape); ctx.fill();
-  const v = DIRS[G.dir], px = -v[1], py = v[0], e = size*0.16;
+  const v = [Math.cos(G.th), Math.sin(G.th)], px = -v[1], py = v[0], e = size*0.16;
   if (K.shape === 'round'){
     // magnet prongs
     ctx.fillStyle = C.ink;
@@ -1058,7 +1074,8 @@ function makeR3(){
   const BOX = new THREE.BoxGeometry(1, 1, 1);
   const level = new THREE.Group(); scene.add(level);
   const m4 = new THREE.Matrix4(), q0 = new THREE.Quaternion(), v3 = new THREE.Vector3(), s3 = new THREE.Vector3(), tmpC = new THREE.Color();
-  const setInst = (mesh, i, x, y, z, sx, sy, sz) => { v3.set(x, y, z); s3.set(sx, sy, sz); mesh.setMatrixAt(i, m4.compose(v3, q0, s3)); };
+  const UP = new THREE.Vector3(0, 1, 0), qr = new THREE.Quaternion();
+  const setInst = (mesh, i, x, y, z, sx, sy, sz, ang) => { v3.set(x, y, z); s3.set(sx, sy, sz); mesh.setMatrixAt(i, m4.compose(v3, ang ? qr.setFromAxisAngle(UP, -ang) : q0, s3)); };
 
   // box faces are ordered +x, -x, top, bottom, +z, -z: flat colors, like the 2D boxes (bright top, darker sides)
   const boxMats = (top, side) => {
@@ -1108,10 +1125,10 @@ function makeR3(){
   function updateBody(){
     const T = G.trail, segs = []; let total = 0;
     for (let i = 0; i < T.length; i++){
-      const a = T[i], b = T[i+1] || G, L = Math.abs(b.x-a.x) + Math.abs(b.y-a.y);
+      const a = T[i], b = T[i+1] || G, L = Math.hypot(b.x-a.x, b.y-a.y);
       segs.push({a, b, L, s: total}); total += L;
     }
-    const hw = LINE_W/2; let n = 0, nd = 0;
+    let n = 0, nd = 0;
     // in eye view the camera sits in the head, so skip the neck or it fills the bottom of the screen
     const cut = view === 'eye' ? total - 0.9 : Infinity;
     for (const s of segs){
@@ -1129,8 +1146,9 @@ function makeR3(){
         const ax = s.a.x + (s.b.x-s.a.x)*f0, ay = s.a.y + (s.b.y-s.a.y)*f0;
         const bx = s.a.x + (s.b.x-s.a.x)*f1, by = s.a.y + (s.b.y-s.a.y)*f1;
         const frac = (s.s + s.L*(f0+f1)/2) / (total || 1);
-        const w = Math.abs(bx-ax) + LINE_W, d = Math.abs(by-ay) + LINE_W, h = BODY_H*(0.96 + 0.04*frac); // newer pieces sit a hair taller so corners don't flicker
-        setInst(body, n, Math.min(ax, bx) - hw + w/2, h/2, Math.min(ay, by) - hw + d/2, w, h, d);
+        // each piece is a box turned to follow the curve, a bit longer than its stretch so curves stay closed
+        const h = BODY_H*(0.96 + 0.04*frac); // newer pieces sit a hair taller so overlaps don't flicker
+        setInst(body, n, (ax + bx)/2, h/2, (ay + by)/2, Math.hypot(bx-ax, by-ay) + LINE_W*0.7, h, LINE_W, Math.atan2(by-ay, bx-ax));
         body.setColorAt(n++, RIB3[Math.min(RIB3.length-1, Math.floor(frac*RIB3.length))]);
       }
     }
@@ -1206,16 +1224,14 @@ function makeR3(){
     RIB3 = RIB.map(c => col(c));
     dots.material.color = col(C.ribbon);
     buildHead();
-    yaw = Math.atan2(DIRS[G.dir][1], DIRS[G.dir][0]); snapCam = true;
+    yaw = G.th; snapCam = true;
   }
 
   function render(clock, dt){
     if (!G) return;
     const beat = beatPulse(clock), K = G.K;
-    // ease the heading toward the snake's grid direction (about a quarter second per turn)
-    const target = Math.atan2(DIRS[G.dir][1], DIRS[G.dir][0]);
-    const dy = Math.atan2(Math.sin(target - yaw), Math.cos(target - yaw));
-    yaw += dy*(snapCam ? 1 : 1 - Math.exp(-dt*(REDUCED ? 30 : 11)));
+    // the camera follows the snake's heading with a little lag, which softens any wobble
+    yaw += angDiff(G.th, yaw)*(snapCam ? 1 : 1 - Math.exp(-dt*(REDUCED ? 30 : 9)));
     const fx = Math.cos(yaw), fz = Math.sin(yaw);
     const p = G.air ? Math.min(1, G.airT/G.airDur) : 0, jh = Math.sin(Math.PI*p)*1.2*Math.sqrt(K.jump);
 
@@ -1224,7 +1240,7 @@ function makeR3(){
 
     const dead = state === 'dying' || state === 'over' || state === 'lost';
     head.visible = view !== 'eye' && !(dead && Math.floor(G.deadT*12) % 2);
-    head.position.set(G.x, jh, G.y); head.rotation.y = -yaw; head.scale.setScalar(1 + 0.1*beat);
+    head.position.set(G.x, jh, G.y); head.rotation.y = -G.th; head.scale.setScalar(1 + 0.1*beat);
     if (headGlow) headGlow.scale.setScalar(HEAD*(2.4 + 0.8*beat));
     shadow.visible = head.visible; shadow.position.set(G.x, 0.011, G.y);
     shadow.scale.setScalar(Math.max(0.5, 1 - 0.22*jh)); shadow.material.opacity = Math.max(0.15, 0.45 - 0.15*jh);
@@ -1344,7 +1360,7 @@ function goAction(){
 }
 function onPhone(m){
   if (!m || typeof m !== 'object') return;
-  if (m.t === 'turn') turnRel(m.d > 0 ? 1 : -1);
+  if (m.t === 'steer'){ STEER.phone = clamp1(+m.v || 0); STEER.phoneAt = performance.now(); }
   else if (m.t === 'jump') jump();
   else if (m.t === 'go') goAction();
   else if (m.t === 'pause'){ if (state === 'play') pause(); else if (state === 'paused') resume(); }
@@ -1538,7 +1554,7 @@ function toMenu(){
 }
 function pause(){
   if (state !== 'play') return;
-  state = 'paused'; stopMusic(); pointers.clear(); keepAwake(false);
+  state = 'paused'; stopMusic(); pointers.clear(); STEER.drag = 0; keepAwake(false);
   $('pause').hidden = false; $('pauseBtn').hidden = true;
   $('resumeBtn').focus({preventScroll: true});
 }
@@ -1564,21 +1580,23 @@ for (const el of [cvs, $('world')]){
   el.addEventListener('pointerdown', e => {
     if (state !== 'play') return;
     e.preventDefault();
-    pointers.set(e.pointerId, {x: e.clientX, y: e.clientY, turned: false});
+    pointers.set(e.pointerId, {x: e.clientX, y: e.clientY, x0: e.clientX, turned: false});
     try { el.setPointerCapture(e.pointerId); } catch(_) {}
   });
   el.addEventListener('pointermove', e => {
     const p = pointers.get(e.pointerId); if (!p) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
     if (Math.hypot(dx, dy) >= DRAG_PX){
-      if (view === 'top') requestTurn(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 0 : 2) : (dy > 0 ? 1 : 3));
-      else if (Math.abs(dx) > Math.abs(dy)) turnRel(dx > 0 ? 1 : -1);
-      p.x = e.clientX; p.y = e.clientY; p.turned = true;
+      p.turned = true;
+      if (view === 'top'){ aimAt(Math.atan2(dy, dx)); p.x = e.clientX; p.y = e.clientY; }
     }
+    // 3D views: drag sideways like a joystick, the further from where you pressed, the harder the turn
+    if (view !== 'top' && p.turned) STEER.drag = clamp1((e.clientX - p.x0)/90);
   });
   const endPointer = e => {
     const p = pointers.get(e.pointerId); if (!p) return;
     pointers.delete(e.pointerId);
+    if (p.turned) STEER.drag = 0;
     if (!p.turned && e.type === 'pointerup') jump();
   };
   el.addEventListener('pointerup', endPointer);
@@ -1592,6 +1610,9 @@ for (const el of [cvs, $('world')]){
 // (that way a game started from the phone still has music)
 addEventListener('pointerdown', () => initAudio(), true);
 addEventListener('keydown', () => initAudio(), true);
+// held arrow keys steer while they're down
+addEventListener('keyup', e => { if (e.key in REL){ if (REL[e.key] < 0) STEER.keyL = false; else STEER.keyR = false; } });
+addEventListener('blur', () => { STEER.keyL = STEER.keyR = false; STEER.drag = 0; });
 document.addEventListener('gesturestart', e => e.preventDefault());
 document.addEventListener('dblclick', e => e.preventDefault());
 
@@ -1602,8 +1623,8 @@ addEventListener('keydown', e => {
   const go = k === ' ' || k === 'Enter';
   if ((k === 'c' || k === 'C') && !e.repeat && !e.metaKey && !e.ctrlKey){ cycleView(); return; }
   if (state === 'play'){
-    if (view !== 'top' && k in KEYS){ e.preventDefault(); if (k in REL && !e.repeat) turnRel(REL[k]); }
-    else if (k in KEYS){ e.preventDefault(); requestTurn(KEYS[k]); }
+    if (view !== 'top' && k in KEYS){ e.preventDefault(); if (k in REL){ if (REL[k] < 0) STEER.keyL = true; else STEER.keyR = true; } }
+    else if (k in KEYS){ e.preventDefault(); aimAt(Math.atan2(DIRS[KEYS[k]][1], DIRS[KEYS[k]][0])); }
     else if (k === ' '){ e.preventDefault(); if (!e.repeat) jump(); }
     else if (k === 'Escape' || k === 'p' || k === 'P') pause();
   } else if (onControl) {
@@ -1621,7 +1642,7 @@ function frame(now){
   const dt = Math.min(0.05, (now - last)/1000); last = now;
   if (state === 'play'){
     update(dt);
-    const v = DIRS[G.dir], look = 2.4 + G.speed*0.25, k = 1 - Math.exp(-dt*3.2);
+    const v = [Math.cos(G.th), Math.sin(G.th)], look = 2.4 + G.speed*0.25, k = 1 - Math.exp(-dt*3.2);
     const lx = PORTRAIT() ? 1.25 : 1, ly = PORTRAIT() ? 1 : 0.8;
     G.cam.x += (G.x + v[0]*look*lx - G.cam.x)*k;
     G.cam.y += (G.y + v[1]*look*ly + 0.4 - G.cam.y)*k;
