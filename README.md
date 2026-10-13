@@ -1,5 +1,7 @@
 # Serpentine
 
+<img width="1290" height="2056" alt="IMG_2604" src="https://github.com/user-attachments/assets/ca39763f-ad97-4016-965d-121ea832f5fc" />
+
 A rhythm snake game that mixes *Dancing Line* with *Snake*. It's one HTML file with no build step and no dependencies beyond Google Fonts.
 
 ## How to play
