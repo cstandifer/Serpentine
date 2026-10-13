@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1a1230">
+<title>Serpentine Controller</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a1230'/%3E%3Crect x='7' y='12' width='18' height='14' fill='%23c56f1c'/%3E%3Crect x='7' y='7' width='18' height='16' fill='%23ffb547'/%3E%3Crect x='17' y='11' width='3' height='3' fill='%231a1230'/%3E%3Crect x='17' y='16' width='3' height='3' fill='%231a1230'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400;600;800&display=swap">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+/* Phone controller for Serpentine 3D. Same dusk palette as the game.
+   Layout: status up top, the tilt gauge and jump meter in the middle, big thumb buttons at the bottom. */
+:root{
+  --night:#1a1230; --ribbon:#ffb547; --ribbon-side:#c56f1c; --hurdle:#4fd1c5; --pillar:#ff5c8a;
+  --gem:#9fd7ff; --magnet:#d6f25c; --ink:#f6effd; --muted:#a99cc6;
+  --panel:rgba(22,15,42,.9); --rule:rgba(246,239,253,.14);
+  --display:"Bungee","Arial Black",Impact,sans-serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overscroll-behavior:none}
+body{background:radial-gradient(ellipse at 50% 0%,#2a1d4d,var(--night) 70%);color:var(--ink);font-family:var(--body);font-size:15px;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;touch-action:manipulation;overflow:hidden}
+[hidden]{display:none!important}
+.app{height:100%;display:grid;grid-template-rows:auto 1fr;gap:14px;padding:calc(env(safe-area-inset-top,0px) + 14px) 16px calc(env(safe-area-inset-bottom,0px) + 16px);max-width:480px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.brand{font-family:var(--display);font-size:1.25rem;color:var(--ribbon);text-shadow:0 3px 0 var(--ribbon-side);line-height:1}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;font-size:.7rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;background:var(--panel);border:1px solid var(--rule);color:var(--muted)}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.pill.on{color:var(--magnet)}.pill.on i{background:var(--magnet);box-shadow:0 0 8px var(--magnet)}
+.pill.bad{color:var(--pillar)}.pill.bad i{background:var(--pillar)}
+
+.screen{display:grid;gap:16px;align-content:start;min-height:0}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:20px;padding:20px;display:grid;gap:14px}
+.eyebrow{font-size:.7rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.title{font-family:var(--display);font-size:2rem;line-height:.95;margin:4px 0 0;color:var(--ribbon);text-shadow:0 4px 0 var(--ribbon-side)}
+.desc{font-size:.9rem;line-height:1.45;color:var(--muted)}
+.desc b{color:var(--ink)}
+.btn{font-family:var(--display);font-size:1.15rem;background:var(--ribbon);color:var(--night);border:0;border-radius:14px;padding:16px 18px;cursor:pointer;box-shadow:0 5px 0 var(--ribbon-side);width:100%}
+.btn:active{transform:translateY(3px);box-shadow:0 2px 0 var(--ribbon-side)}
+.btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--rule);box-shadow:none;font-family:var(--body);font-weight:800;font-size:.9rem;padding:12px}
+.btn-ghost:active{transform:none;box-shadow:none;background:rgba(246,239,253,.06)}
+.code-in{font-family:var(--display);font-size:2.4rem;letter-spacing:.3em;text-align:center;text-transform:uppercase;width:100%;padding:14px 8px 14px 20px;border-radius:14px;border:1px solid var(--rule);background:rgba(246,239,253,.05);color:var(--ink);outline:none;-webkit-user-select:text;user-select:text}
+.code-in:focus{border-color:var(--ribbon)}
+.hold{display:grid;grid-template-columns:72px 1fr;gap:14px;align-items:center}
+.hold svg{width:72px;height:72px}
+
+/* controller */
+.status{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:end}
+.status .lvl{font-size:.7rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.status .score{font-family:var(--display);font-size:2rem;line-height:1;font-variant-numeric:tabular-nums}
+.status .right{text-align:right;display:grid;gap:6px;justify-items:end}
+.hearts{display:flex;gap:3px}.hearts svg{width:15px;height:15px}
+.hearts .on{fill:var(--pillar)}.hearts .off{fill:none;stroke:var(--muted);stroke-width:1.6;opacity:.6}
+.gems{font-size:.72rem;font-weight:800;color:var(--gem);font-variant-numeric:tabular-nums}
+
+.gauge{position:relative}
+.gauge svg{display:block;width:100%;height:auto}
+.gauge .lab{margin-top:6px;text-align:center;font-size:.72rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.meter{position:relative;border-radius:14px;border:1px solid var(--rule);background:rgba(246,239,253,.03);overflow:hidden}
+.meter canvas{display:block;width:100%;height:84px}
+.meter .lab{position:absolute;left:10px;top:8px;font-size:.66rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.meter .hit{position:absolute;right:10px;top:6px;font-family:var(--display);font-size:1rem;color:var(--hurdle);opacity:0;transition:opacity .25s}
+.meter .hit.show{opacity:1;transition:none}
+.hint{font-size:.8rem;color:var(--pillar);text-align:center;min-height:1.1em}
+
+.pad{display:grid;grid-template-columns:1fr 1.1fr 1fr;gap:10px}
+.pad button{min-height:88px;border-radius:18px;border:1px solid var(--rule);background:rgba(246,239,253,.06);color:var(--ink);font-family:var(--display);font-size:1rem;display:grid;place-items:center;gap:4px;cursor:pointer;touch-action:none}
+.pad button svg{width:30px;height:30px}
+.pad button.jump{background:var(--hurdle);color:var(--night);border-color:var(--hurdle);box-shadow:0 5px 0 #23847c}
+.pad button.fire{background:rgba(255,181,71,.35)}
+.pad button.jump.fire{transform:translateY(3px);box-shadow:0 2px 0 #23847c}
+.tools{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+details.set summary{list-style:none;cursor:pointer;font-weight:800;font-size:.85rem;color:var(--muted);text-align:center;padding:6px}
+details.set summary::-webkit-details-marker{display:none}
+.row{display:grid;gap:6px;font-size:.85rem}
+.row label{display:flex;justify-content:space-between;font-weight:600}
+.row output{color:var(--ribbon);font-weight:800;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--ribbon)}
+.check{display:flex;align-items:center;gap:10px;font-size:.88rem;font-weight:600}
+.check input{width:20px;height:20px;accent-color:var(--ribbon)}
+.portrait-only{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  .portrait-only{display:grid;position:fixed;inset:0;place-items:center;background:var(--night);z-index:5;text-align:center;padding:24px;font-weight:800}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">Serpentine</div>
+    <div class="pill" id="pill"><i></i><span id="pillTxt">Not connected</span></div>
+  </header>
+
+  <!-- 1. enter the code shown on the big screen (skipped when the QR code already carries it) -->
+  <section class="screen" id="join" hidden>
+    <div class="card">
+      <div>
+        <div class="eyebrow">Phone controller</div>
+        <h1 class="title">Join the game</h1>
+      </div>
+      <div class="desc">Type the four-letter code from the big screen.</div>
+      <input class="code-in" id="codeIn" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" aria-label="Game code">
+      <button class="btn" id="joinBtn">Connect</button>
+      <div class="hint" id="joinHint"></div>
+    </div>
+  </section>
+
+  <!-- 2. motion permission + calibration (iPhones only share motion after a tap) -->
+  <section class="screen" id="setup" hidden>
+    <div class="card">
+      <div>
+        <div class="eyebrow" id="setupEyebrow">Connecting…</div>
+        <h1 class="title">Be the snake</h1>
+      </div>
+      <div class="hold">
+        <svg viewBox="0 0 72 72" aria-hidden="true"><rect x="22" y="8" width="28" height="52" rx="6" fill="none" stroke="#ffb547" stroke-width="3" transform="rotate(-14 36 34)"/><path d="M12 54c4 6 12 6 16 0M44 54c4 6 12 6 16 0" fill="none" stroke="#a99cc6" stroke-width="2.4" stroke-linecap="round"/><path d="M8 30l-4 4 4 4M64 30l4 4-4 4" fill="none" stroke="#4fd1c5" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="desc"><b>Hold it upright like a remote</b>, screen toward you and tipped back a little. Tip left or right to turn. Jump for real to jump (keep a good grip).</div>
+      </div>
+      <button class="btn" id="motionBtn">Enable motion</button>
+      <button class="btn btn-ghost" id="buttonsBtn">Use buttons only</button>
+      <div class="hint" id="setupHint"></div>
+    </div>
+  </section>
+
+  <!-- 3. the controller -->
+  <section class="screen" id="ctl" hidden>
+    <div class="status">
+      <div>
+        <div class="lvl" id="lvl">Waiting for the game</div>
+        <div class="score" id="score">0</div>
+      </div>
+      <div class="right">
+        <div class="hearts" id="hearts"></div>
+        <div class="gems" id="gems"></div>
+      </div>
+    </div>
+    <button class="btn" id="goBtn" hidden>Start</button>
+    <div class="gauge" id="gauge">
+      <svg viewBox="0 0 320 150" aria-hidden="true">
+        <path id="arcBase" d="M40 140 A120 120 0 0 1 280 140" fill="none" stroke="rgba(246,239,253,.12)" stroke-width="16" stroke-linecap="round"/>
+        <path id="zoneL" fill="none" stroke="#ffb547" stroke-width="16" stroke-linecap="round" opacity=".25"/>
+        <path id="zoneR" fill="none" stroke="#ffb547" stroke-width="16" stroke-linecap="round" opacity=".25"/>
+        <line id="needle" x1="160" y1="140" x2="160" y2="38" stroke="#f6effd" stroke-width="5" stroke-linecap="round"/>
+        <circle cx="160" cy="140" r="9" fill="#f6effd"/>
+      </svg>
+      <div class="lab" id="gaugeLab">Tilt to turn</div>
+    </div>
+    <div class="meter" id="meter">
+      <canvas id="spark"></canvas>
+      <div class="lab">Jump sensor</div>
+      <div class="hit" id="hit">Jump!</div>
+    </div>
+    <div class="hint" id="ctlHint"></div>
+    <div class="pad">
+      <button id="leftBtn" aria-label="Turn left"><svg viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 7l-8 8 8 8"/></svg>Left</button>
+      <button id="jumpBtn" class="jump" aria-label="Jump"><svg viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18l8-8 8 8"/><path d="M6 25h18"/></svg>Jump</button>
+      <button id="rightBtn" aria-label="Turn right"><svg viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7l8 8-8 8"/></svg>Right</button>
+    </div>
+    <div class="tools">
+      <button class="btn btn-ghost" id="recenterBtn">Recenter</button>
+      <button class="btn btn-ghost" id="pauseBtn">Pause</button>
+      <button class="btn btn-ghost" id="viewBtn">View</button>
+    </div>
+    <details class="set">
+      <summary>Sensitivity</summary>
+      <div class="card" style="margin-top:8px">
+        <div class="row"><label for="tiltIn">Tilt to turn <output id="tiltOut"></output></label><input type="range" id="tiltIn" min="10" max="40" step="1"></div>
+        <div class="row"><label for="jumpIn">Jump sensitivity <output id="jumpOut"></output></label><input type="range" id="jumpIn" min="1" max="5" step="1"></div>
+        <label class="check"><input type="checkbox" id="steerIn"> Steer by tilting</label>
+        <label class="check"><input type="checkbox" id="hopIn"> Jump by jumping</label>
+        <label class="check"><input type="checkbox" id="flipIn"> Flip left and right</label>
+      </div>
+    </details>
+  </section>
+</div>
+<div class="portrait-only">Turn your phone upright to steer.</div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const store = {
+  get(k){ try { return localStorage.getItem('serpentine-ctl-' + k); } catch(_) { return null; } },
+  set(k, v){ try { localStorage.setItem('serpentine-ctl-' + k, String(v)); } catch(_) {} }
+};
+const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch(_) {} };
+
+// ---- settings ----
+const SET = {
+  tilt: +store.get('tilt') || 22,           // degrees of sideways tip that counts as a turn
+  jump: +store.get('jump') || 3,            // 1 = needs a big jump, 5 = hair trigger
+  steer: store.get('steer') !== '0',
+  hop: store.get('hop') !== '0',
+  flip: store.get('flip') === '1'
+};
+function bindSettings(){
+  const sync = () => { $('tiltOut').textContent = SET.tilt + '°'; $('jumpOut').textContent = SET.jump + ' / 5'; drawZones(); };
+  $('tiltIn').value = SET.tilt; $('jumpIn').value = SET.jump;
+  $('steerIn').checked = SET.steer; $('hopIn').checked = SET.hop; $('flipIn').checked = SET.flip;
+  $('tiltIn').addEventListener('input', e => { SET.tilt = +e.target.value; store.set('tilt', SET.tilt); sync(); });
+  $('jumpIn').addEventListener('input', e => { SET.jump = +e.target.value; store.set('jump', SET.jump); sync(); });
+  for (const k of ['steer', 'hop', 'flip']) $(k + 'In').addEventListener('change', e => { SET[k] = e.target.checked; store.set(k, SET[k] ? '1' : '0'); });
+  sync();
+}
+
+// ---- screens ----
+const show = id => { for (const s of ['join', 'setup', 'ctl']) $(s).hidden = s !== id; };
+function pill(text, kind){ $('pillTxt').textContent = text; $('pill').className = 'pill' + (kind ? ' ' + kind : ''); }
+
+// ---- link to the big screen ----
+let peer = null, conn = null, code = '', retry = null, motionReady = false;
+const connected = () => !!(conn && conn.open);
+function send(msg){ if (connected()) try { conn.send(msg); } catch(_) {} }
+function connect(c){
+  code = c.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+  if (code.length !== 4){ show('join'); return; }
+  if (location.hash.slice(1) !== code) history.replaceState(null, '', '#' + code);
+  clearTimeout(retry);
+  if (typeof window.Peer !== 'function'){ pill('Offline', 'bad'); $('setupEyebrow').textContent = "Couldn't load the link library. Check your connection."; return; }
+  pill('Connecting…');
+  if (!peer || peer.destroyed){
+    peer = new window.Peer({debug: 0});
+    peer.on('open', dial);
+    peer.on('error', err => {
+      if (err.type === 'peer-unavailable'){
+        pill('No game', 'bad');
+        const msg = `No game with code ${code} right now. Check the big screen.`;
+        $('setupEyebrow').textContent = msg; $('joinHint').textContent = msg; $('ctlHint').textContent = msg;
+      } else pill('Reconnecting…', 'bad');
+      scheduleRetry();
+    });
+    peer.on('disconnected', () => { if (!peer.destroyed) try { peer.reconnect(); } catch(_) {} });
+  } else if (peer.open) dial();
+}
+function dial(){
+  if (connected()) return;
+  const c = peer.connect('serpentine-' + code.toLowerCase(), {reliable: true});
+  c.on('open', () => {
+    conn = c; pill('Connected', 'on');
+    $('setupEyebrow').textContent = `Connected to game ${code}`; $('ctlHint').textContent = ''; $('joinHint').textContent = '';
+  });
+  c.on('data', onGame);
+  c.on('close', () => { if (conn === c){ conn = null; pill('Reconnecting…', 'bad'); scheduleRetry(); } });
+}
+function scheduleRetry(){ clearTimeout(retry); retry = setTimeout(() => { if (!connected() && code) connect(code); }, 2500); }
+
+// ---- messages from the game ----
+const HEART = 'M8 14s-6-3.6-6-7.6A3.2 3.2 0 0 1 8 4.3a3.2 3.2 0 0 1 6 2.1C14 10.4 8 14 8 14z';
+let gameState = 'menu';
+function onGame(m){
+  if (!m || typeof m !== 'object') return;
+  if (m.t === 'buzz') buzz(m.p);
+  else if (m.t === 'state'){
+    gameState = m.state;
+    $('lvl').textContent = `Level ${m.level} · ${m.name}`;
+    $('score').textContent = m.score;
+    $('gems').textContent = `${m.gems}/${m.goal} gems`;
+    $('hearts').innerHTML = Array.from({length: 3}, (_, i) => `<svg viewBox="0 0 16 16"><path class="${i < m.lives ? 'on' : 'off'}" d="${HEART}"/></svg>`).join('');
+    $('goBtn').hidden = !m.go; $('goBtn').textContent = m.go || 'Start';
+    $('pauseBtn').textContent = m.state === 'paused' ? 'Resume' : 'Pause';
+  }
+}
+
+// ---- steering: tip left/right past a threshold = one turn; come back toward center to arm the next one ----
+let g0 = 0, needCal = true, rel = 0, side = 0, suppressUntil = 0, gotOrient = false;
+function turn(d){
+  send({t: 'turn', d});
+  buzz(8);
+  const b = $(d < 0 ? 'leftBtn' : 'rightBtn'); b.classList.add('fire'); setTimeout(() => b.classList.remove('fire'), 140);
+}
+function onOrient(e){
+  if (e.gamma == null) return;
+  if (!gotOrient && !gotMotion) $('ctlHint').textContent = '';
+  gotOrient = true;
+  // past about 80° of forward tilt the gamma reading flips, so ignore steering until the phone tips back
+  if (Math.abs(e.beta) > 80){ $('gaugeLab').textContent = 'Tip the top back a little'; return; }
+  if (needCal){ g0 = e.gamma; needCal = false; }
+  let r = e.gamma - g0;
+  if (r > 90) r -= 180; else if (r < -90) r += 180;
+  if (SET.flip) r = -r;
+  rel += (r - rel)*0.5;
+  const now = performance.now(), T = SET.tilt;
+  $('gaugeLab').textContent = side ? (side < 0 ? 'Left' : 'Right') : 'Tilt to turn';
+  if (!SET.steer) return;
+  // a real jump wobbles the phone, so steering pauses briefly after one
+  if (now < suppressUntil){ if (Math.abs(rel) > T) side = Math.sign(rel); return; }
+  if (side === 0){ if (Math.abs(rel) > T){ side = Math.sign(rel); turn(side); } }
+  else if (Math.abs(rel) < T*0.45) side = 0;
+  else if (Math.sign(rel) !== side && Math.abs(rel) > T){ side = Math.sign(rel); turn(side); }
+}
+
+// ---- jumping: a push-off spike, then a moment of near-weightlessness while you're in the air ----
+const hist = [], marks = [];
+let lastSpike = -1e9, lowStart = null, lastJump = -1e9, gotMotion = false;
+const thresholds = () => ({spike: 1.75 - 0.1*SET.jump, low: 0.3 + 0.06*SET.jump, hold: 100 - 12*SET.jump});
+function fireJump(fromBody){
+  const now = performance.now();
+  lastJump = now; marks.push(now);
+  send({t: 'jump'}); buzz(15);
+  if (fromBody) suppressUntil = now + 700;
+  const h = $('hit'); h.classList.add('show'); setTimeout(() => h.classList.remove('show'), 300);
+  const b = $('jumpBtn'); b.classList.add('fire'); setTimeout(() => b.classList.remove('fire'), 140);
+}
+function onMotion(e){
+  const a = e.accelerationIncludingGravity;
+  if (!a || a.x == null) return;
+  if (!gotOrient && !gotMotion) $('ctlHint').textContent = '';
+  gotMotion = true;
+  const t = performance.now(), m = Math.hypot(a.x, a.y, a.z)/9.81, th = thresholds();
+  hist.push({t, m});
+  while (hist.length && hist[0].t < t - 3000) hist.shift();
+  if (!SET.hop) return;
+  if (m > th.spike) lastSpike = t;
+  if (m < th.low){
+    if (lowStart === null) lowStart = t;
+    if (t - lowStart >= th.hold && t - lastSpike < 700 && t - lastJump > 650) fireJump(true);
+  } else lowStart = null;
+}
+
+// ---- drawing: tilt gauge + jump meter ----
+const CX = 160, CY = 140, RAD = 120, SPAN = 70; // gauge shows ±70°
+const pt = deg => { const a = (deg - 90)*Math.PI/180; return [CX + RAD*Math.cos(a), CY + RAD*Math.sin(a)]; };
+const arc = (d0, d1) => { const [x0, y0] = pt(d0), [x1, y1] = pt(d1); return `M${x0.toFixed(1)} ${y0.toFixed(1)} A${RAD} ${RAD} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
+function drawZones(){ $('zoneL').setAttribute('d', arc(-SPAN*0.94, -SET.tilt)); $('zoneR').setAttribute('d', arc(SET.tilt, SPAN*0.94)); }
+const spark = $('spark'), sctx = spark.getContext('2d');
+function drawFrame(){
+  const deg = Math.max(-SPAN, Math.min(SPAN, rel));
+  const [nx, ny] = pt(deg);
+  $('needle').setAttribute('x2', (CX + (nx - CX)*0.85).toFixed(1)); $('needle').setAttribute('y2', (CY + (ny - CY)*0.85).toFixed(1));
+  $('zoneL').setAttribute('opacity', side < 0 ? 1 : 0.25); $('zoneR').setAttribute('opacity', side > 0 ? 1 : 0.25);
+
+  const dpr = Math.min(2, devicePixelRatio || 1), w = spark.clientWidth, h = spark.clientHeight;
+  if (spark.width !== Math.round(w*dpr)){ spark.width = Math.round(w*dpr); spark.height = Math.round(h*dpr); }
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0); sctx.clearRect(0, 0, w, h);
+  const now = performance.now(), th = thresholds(), top = 3, y = g => h - 6 - (Math.min(top, g)/top)*(h - 14), x = t => w - (now - t)/3000*w;
+  const line = (g, color, dash) => { sctx.strokeStyle = color; sctx.setLineDash(dash); sctx.beginPath(); sctx.moveTo(0, y(g)); sctx.lineTo(w, y(g)); sctx.stroke(); };
+  sctx.lineWidth = 1;
+  line(1, 'rgba(246,239,253,.25)', [3, 4]);
+  line(th.spike, 'rgba(255,181,71,.5)', [2, 3]);
+  line(th.low, 'rgba(79,209,197,.5)', [2, 3]);
+  sctx.setLineDash([]);
+  while (marks.length && marks[0] < now - 3000) marks.shift();
+  sctx.fillStyle = 'rgba(79,209,197,.22)';
+  for (const t of marks) sctx.fillRect(x(t) - 3, 0, 6, h);
+  if (hist.length > 1){
+    sctx.strokeStyle = '#ffb547'; sctx.lineWidth = 2; sctx.lineJoin = 'round'; sctx.beginPath();
+    hist.forEach((p, i) => i ? sctx.lineTo(x(p.t), y(p.m)) : sctx.moveTo(x(p.t), y(p.m)));
+    sctx.stroke();
+  }
+  requestAnimationFrame(drawFrame);
+}
+
+// ---- motion permission ----
+let wake = null;
+async function keepAwake(){ try { if (!wake && 'wakeLock' in navigator){ wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch(_) {} }
+document.addEventListener('visibilitychange', () => { if (!document.hidden && motionReady) keepAwake(); });
+async function enableMotion(){
+  $('setupHint').textContent = '';
+  try {
+    // iOS asks once for "motion and orientation"; both requests must start inside this tap
+    const asks = [];
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') asks.push(DeviceMotionEvent.requestPermission());
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') asks.push(DeviceOrientationEvent.requestPermission());
+    const res = await Promise.all(asks);
+    if (res.some(r => r !== 'granted')) throw new Error('denied');
+  } catch(_) {
+    $('setupHint').textContent = 'Motion access was blocked. You can still play with the buttons, or allow it in Safari settings and reload.';
+    return;
+  }
+  addEventListener('deviceorientation', onOrient);
+  addEventListener('devicemotion', onMotion);
+  motionReady = true; needCal = true;
+  keepAwake();
+  enterController();
+  setTimeout(() => {
+    if (!gotOrient && !gotMotion)
+      $('ctlHint').textContent = window.isSecureContext ? "This phone isn't sharing motion data. The buttons still work." : 'Motion sensors need the https:// address. The buttons still work.';
+  }, 1500);
+}
+function enterController(){
+  show('ctl');
+  if (!motionReady){ $('gauge').hidden = true; $('meter').hidden = true; }
+}
+
+// ---- buttons ----
+const press = (id, fn) => $(id).addEventListener('pointerdown', e => { e.preventDefault(); fn(); });
+press('leftBtn', () => turn(-1));
+press('rightBtn', () => turn(1));
+press('jumpBtn', () => fireJump(false));
+$('goBtn').addEventListener('click', () => { send({t: 'go'}); buzz(20); });
+$('recenterBtn').addEventListener('click', () => { needCal = true; side = 0; rel = 0; buzz(10); });
+$('pauseBtn').addEventListener('click', () => send({t: 'pause'}));
+$('viewBtn').addEventListener('click', () => send({t: 'view'}));
+$('motionBtn').addEventListener('click', enableMotion);
+$('buttonsBtn').addEventListener('click', () => { SET.steer = SET.hop = false; enterController(); keepAwake(); });
+$('joinBtn').addEventListener('click', () => { connect($('codeIn').value); if (code.length === 4) show('setup'); });
+$('codeIn').addEventListener('keydown', e => { if (e.key === 'Enter') $('joinBtn').click(); });
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+// ---- start ----
+bindSettings();
+requestAnimationFrame(drawFrame);
+const fromHash = location.hash.slice(1);
+if (fromHash.length >= 4){ show('setup'); connect(fromHash); }
+else show('join');
+})();
+</script>
+</body>
+</html>
