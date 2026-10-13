@@ -132,6 +132,24 @@ button{touch-action:manipulation}
 .lives svg{width:16px;height:16px}
 .lives .on{fill:var(--pillar)}
 .lives .off{fill:none;stroke:var(--muted);stroke-width:1.6;opacity:.6}
+/* leaderboard: arcade-style rows, the newest entry lit up in the ribbon color */
+.board{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:4px}
+.board li{display:grid;grid-template-columns:26px 22px minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 10px;border-radius:10px;background:rgba(246,239,253,.04);font-variant-numeric:tabular-nums}
+.board .r{font-family:var(--display);color:var(--muted);text-align:right}
+.board li:first-child .r{color:var(--ribbon)}
+.board .n{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.board .n small{font-weight:600;color:var(--muted);margin-left:6px}
+.board .s{font-family:var(--display)}
+.board .sn{width:20px;height:20px;display:block}
+.board li.me{background:var(--ribbon);color:var(--night)}
+.board li.me .r,.board li.me small{color:var(--night)}
+.board-empty{margin-top:12px;font-size:.85rem;color:var(--muted)}
+.board-head{display:flex;justify-content:space-between;align-items:baseline;margin-top:2px}
+.entry{display:grid;gap:10px;padding:14px;border-radius:14px;border:1px solid var(--ribbon);background:rgba(255,181,71,.08)}
+.entry .row{display:grid;grid-template-columns:1fr auto;gap:8px}
+.name-in{min-width:0;font-family:var(--display);font-size:1.15rem;letter-spacing:.04em;padding:10px 12px;border-radius:12px;border:1px solid var(--rule);background:rgba(246,239,253,.06);color:var(--ink);outline:none;-webkit-user-select:text;user-select:text}
+.name-in:focus{border-color:var(--ribbon)}
+.entry .btn{padding:10px 16px;font-size:1rem}
 .badge{justify-self:start;font-size:.7rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--night);background:var(--gem);padding:5px 9px;border-radius:999px}
 @media (prefers-reduced-motion:reduce){.btn,.opt span,.goal-bar i{transition:none}}
 </style>
@@ -176,6 +194,11 @@ button{touch-action:manipulation}
         <li><span class="glyph"><svg viewBox="0 0 26 26"><rect x="3" y="10" width="20" height="6" rx="3" style="fill:rgba(246,239,253,.15)"/><rect x="3" y="10" width="13" height="6" rx="3" style="fill:var(--gem)"/></svg></span><span>Eat the level’s gem goal to <b>clear it</b> and unlock the next level.</span></li>
         <li><span class="glyph"><svg viewBox="0 0 26 26"><path d="M13 21s-8-4.8-8-10.2A4.3 4.3 0 0 1 13 8a4.3 4.3 0 0 1 8 2.8C21 16.2 13 21 13 21z" style="fill:var(--pillar)"/></svg></span><span>You get <b>3 lives</b> per run. A crash restarts the level. Lose them all and the run is over.</span></li>
       </ul>
+    </details>
+    <details class="how" id="boardBox">
+      <summary>Leaderboard</summary>
+      <div class="board-head"><span class="eyebrow" id="menuBoardLabel" style="margin-top:12px">Normal</span></div>
+      <div id="menuBoard"></div>
     </details>
     <div class="pick">
       <div class="eyebrow" id="stageLabel">Level</div>
@@ -250,6 +273,15 @@ button{touch-action:manipulation}
       <div class="stat"><div class="v" id="stBest">0</div><div class="k" id="stBestK">Best</div></div>
       <div class="stat"><div class="v" id="stLevel">1</div><div class="k">Level</div></div>
       <div class="stat"><div class="v" id="stGems">0</div><div class="k">Gems</div></div>
+    </div>
+    <div class="entry" id="entry" hidden>
+      <div><div class="eyebrow" id="entryRank" style="color:var(--ribbon)">You made the board</div>
+      <div class="desc" id="entryHint" style="margin-top:4px">Type your name here or on your phone.</div></div>
+      <div class="row"><input class="name-in" id="nameIn" maxlength="12" autocomplete="off" spellcheck="false" aria-label="Your name"><button class="btn" id="nameBtn">Save</button></div>
+    </div>
+    <div>
+      <div class="eyebrow" id="overBoardLabel">Leaderboard</div>
+      <div id="overBoard"></div>
     </div>
     <div class="actions">
       <button class="btn" id="againBtn">Retry level 1</button>
@@ -1365,12 +1397,14 @@ function onPhone(m){
   else if (m.t === 'go') goAction();
   else if (m.t === 'pause'){ if (state === 'play') pause(); else if (state === 'paused') resume(); }
   else if (m.t === 'view') cycleView();
+  else if (m.t === 'name') saveName(m.name);
 }
 let lastPhone = '';
 function syncPhone(force){
   if (!phoneOn() || !G) return;
   const go = {menu: `Start level ${stage + 1}`, over: 'New run', lost: `Restart level ${G.idx + 1}`, clear: `Start level ${G.idx + 2}`, paused: 'Resume'}[state] || '';
-  const msg = {t: 'state', state, go, view, score: state === 'menu' ? 0 : score(), lives: RUN.lives, level: G.idx + 1, name: G.S.name, gems: Math.min(G.gems, G.S.goal), goal: G.S.goal};
+  const ask = pending ? {rank: rankFor(pending.diff, pending.score) + 1, score: pending.score, name: store.get('name') || ''} : null;
+  const msg = {t: 'state', state, go, view, ask, score: state === 'menu' ? 0 : score(), lives: RUN.lives, level: G.idx + 1, name: G.S.name, gems: Math.min(G.gems, G.S.goal), goal: G.S.goal};
   const key = JSON.stringify(msg);
   if (!force && key === lastPhone) return;
   lastPhone = key; phoneSend(msg);
@@ -1464,6 +1498,8 @@ function updateMenuUI(){
     (unlocked < STAGES.length ? ` Level ${unlocked + 1} unlocks when you clear level ${unlocked}.` : '');
   $('snakeDesc').textContent = SNAKES[snake].desc;
   $('diffDesc').textContent = DIFFS[diff].desc;
+  $('menuBoardLabel').textContent = DIFFS[diff].name;
+  renderBoard($('menuBoard'), diff, lastEntry);
   for (const k in bests) $('best-' + k).textContent = 'Best ' + bests[k];
   $('startBtn').textContent = `Start level ${stage + 1}`;
 }
@@ -1494,8 +1530,51 @@ function saveBest(sc){
   if (isBest){ bests[RUN.diff] = sc; store.set('best-' + RUN.diff, sc); }
   return isBest;
 }
+// ---- leaderboard: top 10 per difficulty, kept in this browser ----
+const BOARD_N = 10;
+const boards = {};
+for (const k in DIFFS){ try { boards[k] = JSON.parse(store.get('board-' + k)) || []; } catch(_) { boards[k] = []; } }
+let pending = null, lastEntry = null;   // pending: a qualifying run waiting for a name
+const cleanName = n => String(n || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 12);
+const rankFor = (diff, sc) => { const b = boards[diff]; let i = 0; while (i < b.length && b[i].score >= sc) i++; return i; };
+function renderBoard(el, diff, mark){
+  const b = boards[diff];
+  if (!b.length){ el.innerHTML = '<div class="board-empty">No scores yet. Be the first.</div>'; return; }
+  const ol = document.createElement('ol'); ol.className = 'board';
+  b.forEach((e, i) => {
+    const li = document.createElement('li');
+    if (e === mark) li.className = 'me';
+    li.innerHTML = `<span class="r">${i + 1}</span>${snakeIcon(SNAKES[e.snake] ? e.snake : 'classic')}<span class="n"></span><span class="s">${e.score}</span>`;
+    const n = li.querySelector('.n'); n.textContent = e.name;
+    const sm = document.createElement('small'); sm.textContent = e.won ? 'cleared all' : 'L' + e.level; n.appendChild(sm);
+    ol.appendChild(li);
+  });
+  el.replaceChildren(ol);
+}
+function saveName(name){
+  if (!pending) return;
+  name = cleanName(name) || cleanName(store.get('name')) || 'Snake';
+  const e = {...pending, name, at: Date.now()}, b = boards[e.diff];
+  b.splice(rankFor(e.diff, e.score), 0, e); b.length = Math.min(b.length, BOARD_N);
+  store.set('board-' + e.diff, JSON.stringify(b)); store.set('name', name);
+  pending = null; lastEntry = e;
+  $('entry').hidden = true;
+  renderBoard($('overBoard'), e.diff, e); updateMenuUI(); syncPhone(true);
+  if (state === 'over') $('againBtn').focus({preventScroll: true});
+}
 function showOver(won){
   const sc = score(), isBest = saveBest(sc);
+  const qual = sc > 0 && (boards[RUN.diff].length < BOARD_N || sc > boards[RUN.diff][boards[RUN.diff].length - 1].score);
+  pending = qual ? {score: sc, diff: RUN.diff, snake: RUN.snake, level: G.idx + 1, gems: RUN.gems + (G.done ? 0 : G.gems), won} : null;
+  lastEntry = null;
+  $('entry').hidden = !qual;
+  if (qual){
+    $('entryRank').textContent = `You made the board · #${rankFor(RUN.diff, sc) + 1}`;
+    $('entryHint').textContent = phoneOn() ? 'Type your name here or on your phone.' : 'Type your name and press Enter.';
+    $('nameIn').value = store.get('name') || '';
+  }
+  $('overBoardLabel').textContent = DIFFS[RUN.diff].name + ' leaderboard';
+  renderBoard($('overBoard'), RUN.diff, null);
   RUN.won = won;
   $('cause').textContent = won ? `You cleared all ${STAGES.length} levels` : `Out of lives. ${CAUSES[G.cause] || 'You crashed'}`;
   $('finalScore').textContent = sc;
@@ -1508,7 +1587,7 @@ function showOver(won){
   hideOverlays(); $('over').hidden = false;
   state = 'over'; keepAwake(false);
   updateMenuUI();
-  setTimeout(() => $('againBtn').focus({preventScroll: true}), 50);
+  setTimeout(() => (qual ? $('nameIn') : $('againBtn')).focus({preventScroll: true}), 50);
 }
 function showClear(){
   if (G.idx + 1 >= STAGES.length) return showOver(true);
@@ -1533,6 +1612,7 @@ function begin(){
   startMusic(); keepAwake(true);
 }
 function start(idx){
+  if (pending) saveName('');
   initAudio();
   RUN = newRunState();
   loadStage(idx);
@@ -1546,6 +1626,7 @@ function nextStage(){
   begin();
 }
 function toMenu(){
+  if (pending) saveName('');
   state = 'menu';
   RUN = newRunState(); loadStage(stage);
   hideOverlays(); $('menu').hidden = false; $('pauseBtn').hidden = true;
@@ -1569,6 +1650,8 @@ $('retryBtn').addEventListener('click', retryLevel);
 $('setupBtn').addEventListener('click', toMenu);
 $('nextBtn').addEventListener('click', nextStage);
 $('resumeBtn').addEventListener('click', resume);
+$('nameBtn').addEventListener('click', () => saveName($('nameIn').value));
+$('nameIn').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); e.stopPropagation(); saveName($('nameIn').value); } });
 $('pauseBtn').addEventListener('click', pause);
 $('muteBtn').addEventListener('click', () => { initAudio(); setMuted(!muted); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
@@ -1621,6 +1704,8 @@ const REL = {ArrowRight: 1, d: 1, D: 1, ArrowLeft: -1, a: -1, A: -1};
 addEventListener('keydown', e => {
   const k = e.key, onControl = e.target && (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'SUMMARY');
   const go = k === ' ' || k === 'Enter';
+  const typing = e.target && e.target.tagName === 'INPUT' && e.target.type === 'text' || e.target === $('nameIn');
+  if (typing) return;
   if ((k === 'c' || k === 'C') && !e.repeat && !e.metaKey && !e.ctrlKey){ cycleView(); return; }
   if (state === 'play'){
     if (view !== 'top' && k in KEYS){ e.preventDefault(); if (k in REL){ if (REL[k] < 0) STEER.keyL = true; else STEER.keyR = true; } }
@@ -1671,6 +1756,7 @@ setView(view);
 updateMenuUI();
 startPhoneLink();
 $('how').open = !store.get('played');
+$('boardBox').open = Object.values(boards).some(b => b.length);
 requestAnimationFrame(frame);
 })();
 </script>

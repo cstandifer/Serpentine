@@ -75,6 +75,9 @@ header{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .pad button.jump{background:var(--hurdle);color:var(--night);border-color:var(--hurdle);box-shadow:0 5px 0 #23847c}
 .pad button.fire{background:rgba(255,181,71,.35)}
 .pad button.jump.fire{transform:translateY(3px);box-shadow:0 2px 0 #23847c}
+.namecard{border-color:var(--ribbon);background:rgba(255,181,71,.1)}
+.name-in{font-family:var(--display);font-size:1.5rem;letter-spacing:.04em;width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--rule);background:rgba(246,239,253,.06);color:var(--ink);outline:none;-webkit-user-select:text;user-select:text}
+.name-in:focus{border-color:var(--ribbon)}
 .tools{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 details.set summary{list-style:none;cursor:pointer;font-weight:800;font-size:.85rem;color:var(--muted);text-align:center;padding:6px}
 details.set summary::-webkit-details-marker{display:none}
@@ -139,6 +142,14 @@ input[type=range]{width:100%;accent-color:var(--ribbon)}
         <div class="hearts" id="hearts"></div>
         <div class="gems" id="gems"></div>
       </div>
+    </div>
+    <div class="card namecard" id="namePanel" hidden>
+      <div>
+        <div class="eyebrow" id="nameRank" style="color:var(--ribbon)">You made the board</div>
+        <div class="title" id="nameScore" style="font-size:1.8rem">0</div>
+      </div>
+      <input class="name-in" id="nameIn" maxlength="12" autocomplete="nickname" autocapitalize="words" spellcheck="false" placeholder="Your name" aria-label="Your name">
+      <button class="btn" id="nameBtn">Save to leaderboard</button>
     </div>
     <button class="btn" id="goBtn" hidden>Start</button>
     <div class="gauge" id="gauge">
@@ -264,6 +275,16 @@ function onGame(m){
     $('hearts').innerHTML = Array.from({length: 3}, (_, i) => `<svg viewBox="0 0 16 16"><path class="${i < m.lives ? 'on' : 'off'}" d="${HEART}"/></svg>`).join('');
     $('goBtn').hidden = !m.go; $('goBtn').textContent = m.go || 'Start';
     $('pauseBtn').textContent = m.state === 'paused' ? 'Resume' : 'Pause';
+    // the big screen asks for a name when a run makes the leaderboard
+    const np = $('namePanel');
+    if (m.ask && np.hidden){
+      $('nameRank').textContent = `You made the board · #${m.ask.rank}`;
+      $('nameScore').textContent = m.ask.score;
+      $('nameIn').value = store.get('name') || m.ask.name || '';
+      buzz([20, 40, 20]);
+    }
+    np.hidden = !m.ask;
+    $('goBtn').classList.toggle('btn-ghost', !!m.ask);
   }
 }
 
@@ -408,6 +429,13 @@ for (const [id, v] of [['leftBtn', -1], ['rightBtn', 1]]){
 }
 press('jumpBtn', () => fireJump(false));
 $('goBtn').addEventListener('click', () => { send({t: 'go'}); buzz(20); });
+function sendName(){
+  const n = $('nameIn').value.trim().slice(0, 12);
+  if (n) store.set('name', n);
+  send({t: 'name', name: n}); $('nameIn').blur(); $('namePanel').hidden = true; buzz(20);
+}
+$('nameBtn').addEventListener('click', sendName);
+$('nameIn').addEventListener('keydown', e => { if (e.key === 'Enter') sendName(); });
 $('recenterBtn').addEventListener('click', () => { needCal = true; tiltV = 0; rel = 0; buzz(10); });
 $('pauseBtn').addEventListener('click', () => send({t: 'pause'}));
 $('viewBtn').addEventListener('click', () => send({t: 'view'}));
