@@ -12,6 +12,7 @@
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
 /* Phone controller for Serpentine 3D. Same dusk palette as the game.
+   Steering is analog: the tilt angle streams to the game as a value from -1 to 1.
    Layout: status up top, the tilt gauge and jump meter in the middle, big thumb buttons at the bottom. */
 :root{
   --night:#1a1230; --ribbon:#ffb547; --ribbon-side:#c56f1c; --hurdle:#4fd1c5; --pillar:#ff5c8a;
@@ -119,7 +120,7 @@ input[type=range]{width:100%;accent-color:var(--ribbon)}
       </div>
       <div class="hold">
         <svg viewBox="0 0 72 72" aria-hidden="true"><rect x="22" y="8" width="28" height="52" rx="6" fill="none" stroke="#ffb547" stroke-width="3" transform="rotate(-14 36 34)"/><path d="M12 54c4 6 12 6 16 0M44 54c4 6 12 6 16 0" fill="none" stroke="#a99cc6" stroke-width="2.4" stroke-linecap="round"/><path d="M8 30l-4 4 4 4M64 30l4 4-4 4" fill="none" stroke="#4fd1c5" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <div class="desc"><b>Hold it upright like a remote</b>, screen toward you and tipped back a little. Tip left or right to turn. Jump for real to jump (keep a good grip).</div>
+        <div class="desc"><b>Hold it upright like a remote</b>, screen toward you and tipped back a little. Tip a little for a gentle curve, more for a tight one. Jump for real to jump (keep a good grip).</div>
       </div>
       <button class="btn" id="motionBtn">Enable motion</button>
       <button class="btn btn-ghost" id="buttonsBtn">Use buttons only</button>
@@ -148,7 +149,7 @@ input[type=range]{width:100%;accent-color:var(--ribbon)}
         <line id="needle" x1="160" y1="140" x2="160" y2="38" stroke="#f6effd" stroke-width="5" stroke-linecap="round"/>
         <circle cx="160" cy="140" r="9" fill="#f6effd"/>
       </svg>
-      <div class="lab" id="gaugeLab">Tilt to turn</div>
+      <div class="lab" id="gaugeLab">Straight</div>
     </div>
     <div class="meter" id="meter">
       <canvas id="spark"></canvas>
@@ -169,7 +170,7 @@ input[type=range]{width:100%;accent-color:var(--ribbon)}
     <details class="set">
       <summary>Sensitivity</summary>
       <div class="card" style="margin-top:8px">
-        <div class="row"><label for="tiltIn">Tilt to turn <output id="tiltOut"></output></label><input type="range" id="tiltIn" min="10" max="40" step="1"></div>
+        <div class="row"><label for="tiltIn">Tilt for a full turn <output id="tiltOut"></output></label><input type="range" id="tiltIn" min="15" max="45" step="1"></div>
         <div class="row"><label for="jumpIn">Jump sensitivity <output id="jumpOut"></output></label><input type="range" id="jumpIn" min="1" max="5" step="1"></div>
         <label class="check"><input type="checkbox" id="steerIn"> Steer by tilting</label>
         <label class="check"><input type="checkbox" id="hopIn"> Jump by jumping</label>
@@ -192,7 +193,7 @@ const buzz = p => { try { navigator.vibrate && navigator.vibrate(p); } catch(_) 
 
 // ---- settings ----
 const SET = {
-  tilt: +store.get('tilt') || 22,           // degrees of sideways tip that counts as a turn
+  tilt: +store.get('full') || 28,           // degrees of sideways tip for a full-lock turn
   jump: +store.get('jump') || 3,            // 1 = needs a big jump, 5 = hair trigger
   steer: store.get('steer') !== '0',
   hop: store.get('hop') !== '0',
@@ -202,7 +203,7 @@ function bindSettings(){
   const sync = () => { $('tiltOut').textContent = SET.tilt + '°'; $('jumpOut').textContent = SET.jump + ' / 5'; drawZones(); };
   $('tiltIn').value = SET.tilt; $('jumpIn').value = SET.jump;
   $('steerIn').checked = SET.steer; $('hopIn').checked = SET.hop; $('flipIn').checked = SET.flip;
-  $('tiltIn').addEventListener('input', e => { SET.tilt = +e.target.value; store.set('tilt', SET.tilt); sync(); });
+  $('tiltIn').addEventListener('input', e => { SET.tilt = +e.target.value; store.set('full', SET.tilt); sync(); });
   $('jumpIn').addEventListener('input', e => { SET.jump = +e.target.value; store.set('jump', SET.jump); sync(); });
   for (const k of ['steer', 'hop', 'flip']) $(k + 'In').addEventListener('change', e => { SET[k] = e.target.checked; store.set(k, SET[k] ? '1' : '0'); });
   sync();
@@ -266,33 +267,39 @@ function onGame(m){
   }
 }
 
-// ---- steering: tip left/right past a threshold = one turn; come back toward center to arm the next one ----
-let g0 = 0, needCal = true, rel = 0, side = 0, suppressUntil = 0, gotOrient = false;
-function turn(d){
-  send({t: 'turn', d});
-  buzz(8);
-  const b = $(d < 0 ? 'leftBtn' : 'rightBtn'); b.classList.add('fire'); setTimeout(() => b.classList.remove('fire'), 140);
+// ---- steering: an analog wheel. How far you tip sets how hard the snake turns. ----
+// A few degrees around center do nothing (so a steady hand goes straight), and SET.tilt is the
+// angle that gives a full-lock turn. The value streams to the game whenever it changes.
+let tooSteep = false, g0 = 0, needCal = true, rel = 0, tiltV = 0, btnV = 0, suppressUntil = 0, gotOrient = false, lastSent = 9, lastSentAt = 0;
+const DEAD = 3;
+function tiltToSteer(r){
+  const a = Math.abs(r); if (a < DEAD) return 0;
+  return Math.sign(r)*Math.pow(Math.min(1, (a - DEAD)/(SET.tilt - DEAD)), 1.3); // gentle near center, firm at the edge
+}
+const currentSteer = () => btnV || (SET.steer && motionReady ? tiltV : 0);
+function sendSteer(force){
+  const v = Math.round(currentSteer()*100)/100, now = performance.now();
+  // send on change, plus a keep-alive so the game knows the phone is still steering
+  if (force || Math.abs(v - lastSent) >= 0.02 || now - lastSentAt > 150){ send({t: 'steer', v}); lastSent = v; lastSentAt = now; }
 }
 function onOrient(e){
   if (e.gamma == null) return;
   if (!gotOrient && !gotMotion) $('ctlHint').textContent = '';
   gotOrient = true;
   // past about 80° of forward tilt the gamma reading flips, so ignore steering until the phone tips back
-  if (Math.abs(e.beta) > 80){ $('gaugeLab').textContent = 'Tip the top back a little'; return; }
+  tooSteep = Math.abs(e.beta) > 80;
+  if (tooSteep){ tiltV = 0; return; }
   if (needCal){ g0 = e.gamma; needCal = false; }
   let r = e.gamma - g0;
   if (r > 90) r -= 180; else if (r < -90) r += 180;
   if (SET.flip) r = -r;
   rel += (r - rel)*0.5;
-  const now = performance.now(), T = SET.tilt;
-  $('gaugeLab').textContent = side ? (side < 0 ? 'Left' : 'Right') : 'Tilt to turn';
-  if (!SET.steer) return;
-  // a real jump wobbles the phone, so steering pauses briefly after one
-  if (now < suppressUntil){ if (Math.abs(rel) > T) side = Math.sign(rel); return; }
-  if (side === 0){ if (Math.abs(rel) > T){ side = Math.sign(rel); turn(side); } }
-  else if (Math.abs(rel) < T*0.45) side = 0;
-  else if (Math.sign(rel) !== side && Math.abs(rel) > T){ side = Math.sign(rel); turn(side); }
+  // a real jump wobbles the phone, so hold the steering steady for a moment after one
+  if (performance.now() >= suppressUntil) tiltV = tiltToSteer(rel);
+  sendSteer();
 }
+// keep-alive even when the sensors are quiet (and when the browser pauses animation)
+setInterval(sendSteer, 100);
 
 // ---- jumping: a push-off spike, then a moment of near-weightlessness while you're in the air ----
 const hist = [], marks = [];
@@ -326,13 +333,16 @@ function onMotion(e){
 const CX = 160, CY = 140, RAD = 120, SPAN = 70; // gauge shows ±70°
 const pt = deg => { const a = (deg - 90)*Math.PI/180; return [CX + RAD*Math.cos(a), CY + RAD*Math.sin(a)]; };
 const arc = (d0, d1) => { const [x0, y0] = pt(d0), [x1, y1] = pt(d1); return `M${x0.toFixed(1)} ${y0.toFixed(1)} A${RAD} ${RAD} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
-function drawZones(){ $('zoneL').setAttribute('d', arc(-SPAN*0.94, -SET.tilt)); $('zoneR').setAttribute('d', arc(SET.tilt, SPAN*0.94)); }
+// the lit arcs cover the working range: from just off center to the full-lock angle
+function drawZones(){ $('zoneL').setAttribute('d', arc(-SET.tilt, -DEAD)); $('zoneR').setAttribute('d', arc(DEAD, SET.tilt)); }
 const spark = $('spark'), sctx = spark.getContext('2d');
 function drawFrame(){
   const deg = Math.max(-SPAN, Math.min(SPAN, rel));
   const [nx, ny] = pt(deg);
   $('needle').setAttribute('x2', (CX + (nx - CX)*0.85).toFixed(1)); $('needle').setAttribute('y2', (CY + (ny - CY)*0.85).toFixed(1));
-  $('zoneL').setAttribute('opacity', side < 0 ? 1 : 0.25); $('zoneR').setAttribute('opacity', side > 0 ? 1 : 0.25);
+  const v = currentSteer();
+  $('zoneL').setAttribute('opacity', 0.25 + 0.75*Math.max(0, -v)); $('zoneR').setAttribute('opacity', 0.25 + 0.75*Math.max(0, v));
+  $('gaugeLab').textContent = tooSteep && !btnV ? 'Tip the top back a little' : Math.abs(v) < 0.02 ? 'Straight' : `${v < 0 ? 'Left' : 'Right'} ${Math.round(Math.abs(v)*100)}%`;
 
   const dpr = Math.min(2, devicePixelRatio || 1), w = spark.clientWidth, h = spark.clientHeight;
   if (spark.width !== Math.round(w*dpr)){ spark.width = Math.round(w*dpr); spark.height = Math.round(h*dpr); }
@@ -389,11 +399,16 @@ function enterController(){
 
 // ---- buttons ----
 const press = (id, fn) => $(id).addEventListener('pointerdown', e => { e.preventDefault(); fn(); });
-press('leftBtn', () => turn(-1));
-press('rightBtn', () => turn(1));
+// Left and Right steer for as long as you hold them
+for (const [id, v] of [['leftBtn', -1], ['rightBtn', 1]]){
+  const b = $(id);
+  b.addEventListener('pointerdown', e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch(_) {} btnV = v; b.classList.add('fire'); sendSteer(true); buzz(8); });
+  const up = () => { if (btnV === v){ btnV = 0; sendSteer(true); } b.classList.remove('fire'); };
+  b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
+}
 press('jumpBtn', () => fireJump(false));
 $('goBtn').addEventListener('click', () => { send({t: 'go'}); buzz(20); });
-$('recenterBtn').addEventListener('click', () => { needCal = true; side = 0; rel = 0; buzz(10); });
+$('recenterBtn').addEventListener('click', () => { needCal = true; tiltV = 0; rel = 0; buzz(10); });
 $('pauseBtn').addEventListener('click', () => send({t: 'pause'}));
 $('viewBtn').addEventListener('click', () => send({t: 'view'}));
 $('motionBtn').addEventListener('click', enableMotion);
