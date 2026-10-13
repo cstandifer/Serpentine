@@ -27,6 +27,17 @@ A rhythm snake game that mixes *Dancing Line* with *Snake*. It's one HTML file w
 - **Glider**: jumps twice as far and clears pillars, but grows faster.
 - **Magnet**: pulls in nearby gems, then recharges for 3 seconds. Shorter jumps.
 
+## Serpentine 3D (big screen + phone controller)
+
+`serpentine-3d.html` is the same game, levels and music, but you *are* the snake. It's built for a big screen, with your phone as the controller (`controller.html`).
+
+- **Views**: Eye (from inside the snake's head), Chase (just above and behind), or Top (the original board). Press **C** or use the View button on the phone to switch. In the 3D views a minimap in the corner shows your tail.
+- **Steering is relative**: left and right mean *your* left and right, not compass directions.
+- **Phone**: scan the QR code on the menu (or open `/controller.html` and type the 4-letter code). Tip the phone left or right to turn, and **jump for real** to jump. The phone spots a jump from the push-off spike followed by a moment of near-weightlessness while you're in the air. Left, Jump and Right buttons are always there as a backup, and a Sensitivity panel tunes the tilt angle and jump trigger.
+- **Keyboard**: ← → turn, Space jumps, C changes view.
+
+The phone and screen connect through [PeerJS](https://peerjs.com) (its free cloud server only handles the handshake; game data goes directly over WebRTC), so it still works as a static site. Phones only share motion sensors over **HTTPS**, so test the controller on the Render URL rather than a local `http://` address. Uses [three.js](https://threejs.org) for the 3D views; if it can't load, the game falls back to the top view.
+
 ## Run it locally
 
 Open `index.html` in a browser, or serve the folder:
