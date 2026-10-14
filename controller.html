@@ -254,6 +254,8 @@ const show = id => { for (const s of ['join', 'setup', 'ctl']) $(s).hidden = s !
 function pill(text, kind){ $('pillTxt').textContent = text; $('pill').className = 'pill' + (kind ? ' ' + kind : ''); }
 
 // ---- link to the big screen ----
+// STUN servers help the phone and screen find each other; they work when both are on the same network.
+const ICE = [{urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478']}];
 let peer = null, conn = null, code = '', retry = null, motionReady = false;
 const connected = () => !!(conn && conn.open);
 function send(msg){ if (connected()) try { conn.send(msg); } catch(_) {} }
@@ -265,12 +267,12 @@ function connect(c){
   if (typeof window.Peer !== 'function'){ pill('Offline', 'bad'); $('setupEyebrow').textContent = "Couldn't load the link library. Check your connection."; return; }
   pill('Connecting…');
   if (!peer || peer.destroyed){
-    peer = new window.Peer({debug: 0});
+    peer = new window.Peer({debug: 0, config: {iceServers: ICE}});
     peer.on('open', dial);
     peer.on('error', err => {
       if (err.type === 'peer-unavailable'){
         pill('No game', 'bad');
-        const msg = `No game with code ${code} right now. Check the big screen.`;
+        const msg = `No game with code ${code}. Check the code on the screen, and that this phone is on the same Wi-Fi as it (not cellular).`;
         $('setupEyebrow').textContent = msg; $('joinHint').textContent = msg; $('ctlHint').textContent = msg;
       } else pill('Reconnecting…', 'bad');
       scheduleRetry();

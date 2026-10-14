@@ -1802,6 +1802,9 @@ function makeR3(){
 // the game sends back {t:'state',...} for the phone's screen and {t:'buzz',p} for haptics.
 // Up to two phones can join the same code: the first is player 1, the second player 2.
 const PHONE = {peer: null, conns: [null, null], seen: [0, 0], code: ''};
+// STUN servers help the phone and screen find each other over WebRTC; they work when both are on the same
+// network. Cross-network (phone on cellular) needs a TURN relay, and there's no reliable free public one.
+const ICE = [{urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478']}];
 // a phone that's been silent this long (locked, pocketed, tab closed) counts as gone; live phones send several messages a second
 const PHONE_QUIET_MS = 3000;
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -1826,8 +1829,8 @@ function setPhoneUI(note){
   const url = controllerURL(PHONE.code);
   $('phoneDesc').innerHTML = location.protocol === 'file:'
     ? 'Open this game from its web address (like your Render site) so a phone can reach the controller page.'
-    : `Scan with your phone, or open <a href="${url}" target="_blank" rel="noopener">${url.replace(/^https?:\/\//, '')}</a>` +
-      (location.protocol === 'http:' && !/^(localhost|127\.)/.test(location.hostname) ? '. Motion sensors need HTTPS.' : '');
+    : `Scan with your phone, or open <a href="${url}" target="_blank" rel="noopener">${url.replace(/^https?:\/\//, '')}</a>. Keep the phone on the same Wi-Fi as this screen.` +
+      (location.protocol === 'http:' && !/^(localhost|127\.)/.test(location.hostname) ? ' Motion sensors need HTTPS.' : '');
 }
 function drawQR(){
   const box = $('qr'); box.innerHTML = '';
@@ -1839,7 +1842,7 @@ function startPhoneLink(){
   if (typeof window.Peer !== 'function'){ setPhoneUI("Phone link couldn't load (are you offline?). Keyboard still works."); return; }
   const open = (code, attempt) => {
     PHONE.code = code; setPhoneUI('Setting up the phone link…');
-    const peer = new window.Peer('serpentine-' + code.toLowerCase(), {debug: 0});
+    const peer = new window.Peer('serpentine-' + code.toLowerCase(), {debug: 0, config: {iceServers: ICE}});
     PHONE.peer = peer;
     peer.on('open', () => { store.set('phone', code); drawQR(); setPhoneUI(); });
     peer.on('connection', conn => {
