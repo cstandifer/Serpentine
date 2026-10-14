@@ -1884,6 +1884,8 @@ function goAction(){
 function onPhone(m, slot){
   if (!m || typeof m !== 'object') return;
   const pi = MODE === 2 ? slot : 0;   // in solo either phone drives the one snake
+  // the Controls choice decides who drives: on Keyboard, a connected phone doesn't steer anyone
+  if (CTRL !== 'phones' && (m.t === 'steer' || m.t === 'jump')) return;
   if (m.t === 'steer'){ STEERS[pi].phone = clamp1(+m.v || 0); STEERS[pi].phoneAt = performance.now(); }
   else if (m.t === 'jump') jumpFor(pi);
   else if (m.t === 'go') goAction();
