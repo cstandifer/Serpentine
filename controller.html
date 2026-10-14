@@ -8,96 +8,115 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a1230'/%3E%3Crect x='7' y='12' width='18' height='14' fill='%23c56f1c'/%3E%3Crect x='7' y='7' width='18' height='16' fill='%23ffb547'/%3E%3Crect x='17' y='11' width='3' height='3' fill='%231a1230'/%3E%3Crect x='17' y='16' width='3' height='3' fill='%231a1230'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Space+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Azeret+Mono:wght@400;600&display=swap">
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
-/* Phone controller for Serpentine 3D, dressed like the big screen: a night rave poster.
-   Black stock, paper-white type, lime for what's active, hot pink for the one thing to press.
+/* Phone controller for Serpentine 3D, dressed like the big screen: a grid flyer in holographic color.
+   Black ground, thin white rules, wide Archivo with Azeret Mono; the rainbow marks the score and the Jump button.
    Steering is analog: the tilt angle streams to the game as a value from -1 to 1.
    Layout: status up top, the tilt gauge and jump meter in the middle, big thumb buttons at the bottom. */
 :root{
-  --night:#000; --paper:#f4f3ff; --lime:#d6f25c; --pink:#ff5c8a;
-  --ink:#f4f3ff; --muted:#a29fb8; --rule:rgba(244,243,255,.28);
-  --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
-  --body:"Space Mono",ui-monospace,Menlo,Consolas,monospace;
+  --cream:#f6f4ff; --line:rgba(255,255,255,.88); --lime:#7dff5a; --pink:#ff4fd8; --cyan:#5ff0ff; --muted:#9893ad;
+  --holo:linear-gradient(110deg,#5ff0ff 0%,#8a7bff 26%,#ff4fd8 50%,#ffe94d 75%,#7dff5a 100%);
+  --rule:rgba(255,255,255,.4); --rule-soft:rgba(255,255,255,.16);
+  --wide:"Archivo","Arial Black",sans-serif;
+  --mono:"Azeret Mono",ui-monospace,Menlo,Consolas,monospace;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{min-height:100%;margin:0;overscroll-behavior:none}
-body{background:#000;color:var(--ink);font-family:var(--body);font-size:13px;
+body{background:#000;color:var(--cream);font-family:var(--mono);font-size:12px;
   -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;touch-action:manipulation;overflow-x:hidden;overflow-y:auto}
 button,input{font:inherit}
-:focus-visible{outline:3px solid var(--lime);outline-offset:3px}
+:focus-visible{outline:2px solid var(--lime);outline-offset:3px}
 [hidden]{display:none!important}
-.app{min-height:100%;display:grid;grid-template-rows:auto 1fr;gap:16px;padding:calc(env(safe-area-inset-top,0px) + 14px) 16px calc(env(safe-area-inset-bottom,0px) + 20px);max-width:480px;margin:0 auto}
-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:12px;border-bottom:2px solid var(--paper)}
-.brand{font-family:var(--display);font-weight:900;font-size:1.9rem;line-height:.8;text-transform:uppercase;color:var(--lime);text-shadow:3px 3px 0 var(--pink)}
-.pill{display:inline-flex;align-items:center;gap:7px;padding:4px 8px;font-size:.7rem;font-weight:700;border:1px solid var(--rule);color:var(--muted)}
-.pill i{width:8px;height:8px;background:var(--muted)}
+.wide,.brand,.title,.btn,.status .score,.pad button,.gauge .lab,.code-in,.name-in,.me{font-family:var(--wide);font-stretch:125%;font-weight:900;text-transform:uppercase}
+.app{min-height:100%;display:grid;grid-template-rows:auto 1fr;gap:16px;padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 20px);max-width:480px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1.5px solid var(--line)}
+.brand{font-size:1.15rem;line-height:1;color:var(--line)}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:4px 8px;font-size:.66rem;border:1px solid var(--rule-soft);color:var(--muted)}
+.pill i{width:7px;height:7px;border-radius:50%;background:var(--muted)}
 .pill.on{color:var(--lime);border-color:var(--lime)}.pill.on i{background:var(--lime)}
-.pill.bad{color:var(--pink);border-color:var(--pink)}.pill.bad i{background:var(--pink)}
+.pill.bad{color:var(--line);border-color:var(--line)}.pill.bad i{background:var(--line)}
 
 .screen{display:grid;gap:16px;align-content:start;min-height:0}
-.card{border:2px solid var(--paper);padding:18px;display:grid;gap:16px}
-.eyebrow{font-size:.72rem;font-weight:700;color:var(--lime)}
-.title{font-family:var(--display);font-weight:900;font-size:3.4rem;line-height:.8;text-transform:uppercase;margin:6px 0 0;color:var(--lime);text-shadow:4px 4px 0 var(--pink)}
-.desc{font-size:.78rem;line-height:1.6;color:var(--muted)}
-.desc b{color:var(--paper)}
-.btn{font-family:var(--display);font-weight:900;font-size:1.8rem;line-height:1;text-transform:uppercase;background:var(--pink);color:#000;border:2px solid #000;padding:12px 18px;cursor:pointer;box-shadow:6px 6px 0 var(--lime);width:calc(100% - 6px)}
-.btn:active{transform:translate(4px,4px);box-shadow:2px 2px 0 var(--lime)}
-.btn-ghost{background:transparent;color:var(--paper);border:2px solid var(--paper);box-shadow:none;font-size:1.25rem;padding:10px;width:100%}
-.btn-ghost:active{transform:none;background:var(--paper);color:#000}
-.code-in{font-family:var(--display);font-weight:900;font-size:3.4rem;line-height:1;letter-spacing:.2em;text-align:center;text-transform:uppercase;width:100%;padding:8px 8px 8px 18px;border:2px solid var(--paper);background:#000;color:var(--lime);outline:none;-webkit-user-select:text;user-select:text}
+.card{border:1.5px solid var(--line);padding:18px;display:grid;gap:16px}
+.eyebrow{font-size:.7rem;color:var(--muted)}
+.title{font-size:2rem;line-height:.9;margin:6px 0 0;color:var(--line)}
+.desc{font-size:.74rem;line-height:1.6;color:var(--muted)}
+.desc b{color:var(--cream);font-weight:600}
+.btn{font-size:1.15rem;line-height:1;background:var(--line);color:#000;border:0;padding:18px;cursor:pointer;width:100%;display:flex;justify-content:space-between;align-items:center;text-align:left}
+.btn::after{content:"";flex:none;width:16px;height:16px;background:#000;clip-path:polygon(50% 0,59% 41%,100% 50%,59% 59%,50% 100%,41% 59%,0 50%,41% 41%)}
+.btn:active{background:var(--cream)}
+.btn-ghost{background:transparent;color:var(--cream);border:1.5px solid var(--line);font-size:.78rem;padding:12px;justify-content:center;text-align:center}
+.btn-ghost::after{display:none}
+.btn-ghost:active{background:var(--line);color:#000}
+.code-in{font-size:2.4rem;letter-spacing:.14em;text-align:center;width:100%;padding:10px 8px 10px 16px;border:1.5px solid var(--cream);background:#000;color:var(--line);outline:none;-webkit-user-select:text;user-select:text}
 .code-in:focus{border-color:var(--lime)}
 .hold{display:grid;grid-template-columns:72px 1fr;gap:14px;align-items:center}
 .hold svg{width:72px;height:72px}
 
 /* controller */
 .status{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:end}
-.status .lvl{font-size:.72rem;color:var(--muted)}
-.status .score{font-family:var(--display);font-weight:900;font-size:3.6rem;line-height:.8;font-variant-numeric:tabular-nums;color:var(--paper);text-shadow:3px 3px 0 var(--pink);margin-top:6px}
+.status .lvl{font-size:.7rem;color:var(--muted)}
+.status .score{font-size:3rem;line-height:.85;font-variant-numeric:tabular-nums;color:var(--line);margin-top:8px}
 .status .right{text-align:right;display:grid;gap:6px;justify-items:end}
-.hearts{display:flex;gap:3px}.hearts svg{width:16px;height:16px}
-.hearts .on{fill:var(--pink)}.hearts .off{fill:none;stroke:var(--muted);stroke-width:1.6}
-.me{display:none;font-family:var(--display);font-weight:900;font-size:1.3rem;line-height:1;color:#000;padding:2px 7px;margin-right:10px;vertical-align:8px;text-shadow:none;border:2px solid #000}
+.hearts{display:flex;gap:3px}.hearts svg{width:15px;height:15px}
+.hearts .on{fill:var(--line)}.hearts .off{fill:none;stroke:var(--muted);stroke-width:1.6}
+.me{display:none;font-size:.9rem;line-height:1;color:#000;padding:3px 7px;margin-right:10px;vertical-align:10px}
 .me.on{display:inline-block}
-.gems{font-size:.72rem;font-weight:700;color:var(--lime);font-variant-numeric:tabular-nums}
+.gems{font-size:.7rem;color:var(--cyan);font-variant-numeric:tabular-nums}
 
 .gauge{position:relative}
 .gauge svg{display:block;width:100%;height:auto}
-.gauge .lab{margin-top:4px;text-align:center;font-family:var(--display);font-weight:900;font-size:1.5rem;line-height:1;text-transform:uppercase;color:var(--paper)}
-.meter{position:relative;border:2px solid var(--rule);overflow:hidden}
+.gauge .lab{margin-top:2px;text-align:center;font-size:1rem;line-height:1;color:var(--cream)}
+/* the jump meter sits on a fine orange grid, like the flyer's tunnel seen head-on */
+.meter{position:relative;border:1.5px solid var(--rule);overflow:hidden;
+  background-image:linear-gradient(rgba(255,255,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px);background-size:16px 16px}
 .meter canvas{display:block;width:100%;height:84px}
-.meter .lab{position:absolute;left:10px;top:6px;font-size:.66rem;color:var(--muted)}
-.meter .hit{position:absolute;right:10px;top:4px;font-family:var(--display);font-weight:900;font-size:1.4rem;text-transform:uppercase;color:var(--lime);opacity:0;transition:opacity .25s}
+.meter .lab{position:absolute;left:8px;top:6px;font-size:.62rem;color:var(--muted)}
+.meter .hit{position:absolute;right:8px;top:5px;font-family:var(--wide);font-stretch:125%;font-weight:900;font-size:.9rem;text-transform:uppercase;color:var(--lime);opacity:0;transition:opacity .25s}
 .meter .hit.show{opacity:1;transition:none}
-.hint{font-size:.75rem;color:var(--pink);text-align:center;min-height:1.1em}
+.hint{font-size:.7rem;color:var(--line);text-align:center;min-height:1.1em}
 
-/* thumb pad: square blocks; Jump is the pink one, and every button pops when it fires */
-.pad{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:10px}
-.pad button{min-height:92px;border:2px solid var(--paper);background:#000;color:var(--paper);font-family:var(--display);font-weight:900;font-size:1.4rem;text-transform:uppercase;display:grid;place-items:center;gap:2px;cursor:pointer;touch-action:none}
-.pad button svg{width:30px;height:30px}
-.pad button.jump{background:var(--pink);color:#000;border-color:#000;box-shadow:6px 6px 0 var(--lime)}
-.pad button.fire{background:var(--lime);color:#000;border-color:var(--lime)}
-.pad button.jump.fire{background:var(--pink);border-color:#000;transform:translate(4px,4px);box-shadow:2px 2px 0 var(--lime)}
+/* thumb pad: outlined Left and Right, a solid orange Jump; a button flashes lime when it fires */
+.pad{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:10px}
+.pad button{min-height:96px;border:1.5px solid var(--line);background:#000;color:var(--cream);font-size:.85rem;display:grid;place-items:center;align-content:center;gap:6px;cursor:pointer;touch-action:none}
+.pad button svg{width:26px;height:26px}
+.pad button.jump{background:var(--line);color:#000;border-color:var(--line);font-size:1rem}
+.pad button.fire,.pad button.jump.fire{background:var(--lime);color:#000;border-color:var(--lime)}
 .namecard{border-color:var(--lime)}
-.name-in{font-family:var(--display);font-weight:900;font-size:2rem;text-transform:uppercase;width:100%;padding:6px 12px;border:2px solid var(--paper);background:#000;color:var(--paper);outline:none;-webkit-user-select:text;user-select:text}
+.namecard .eyebrow{color:var(--lime)!important}
+.name-in{font-size:1.4rem;width:100%;padding:8px 12px;border:1.5px solid var(--cream);background:#000;color:var(--cream);outline:none;-webkit-user-select:text;user-select:text}
 .name-in:focus{border-color:var(--lime)}
 .tools{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.tools .btn-ghost{font-size:1.1rem;padding:8px 4px}
-details.set summary{list-style:none;cursor:pointer;font-weight:700;font-size:.78rem;color:var(--muted);text-align:center;padding:8px;text-decoration:underline;text-underline-offset:3px}
+.tools .btn-ghost{font-size:.7rem;padding:10px 4px}
+details.set summary{list-style:none;cursor:pointer;font-size:.72rem;color:var(--muted);text-align:center;padding:8px;text-decoration:underline;text-underline-offset:3px}
 details.set summary::-webkit-details-marker{display:none}
-.row{display:grid;gap:6px;font-size:.78rem}
-.row label{display:flex;justify-content:space-between;font-weight:700}
-.row output{color:var(--lime);font-weight:700;font-variant-numeric:tabular-nums}
-input[type=range]{width:100%;accent-color:var(--lime)}
-.check{display:flex;align-items:center;gap:10px;font-size:.8rem}
-.check input{width:20px;height:20px;accent-color:var(--lime)}
+.row{display:grid;gap:6px;font-size:.72rem}
+.row label{display:flex;justify-content:space-between}
+.row output{color:var(--line);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--line)}
+.check{display:flex;align-items:center;gap:10px;font-size:.74rem}
+.check input{width:18px;height:18px;accent-color:var(--line)}
 .portrait-only{display:none}
 @media (orientation:landscape) and (max-height:500px){
-  .portrait-only{display:grid;position:fixed;inset:0;place-items:center;background:#000;z-index:5;text-align:center;padding:24px;font-family:var(--display);font-weight:900;font-size:2rem;text-transform:uppercase}
+  .portrait-only{display:grid;position:fixed;inset:0;place-items:center;background:#000;z-index:5;text-align:center;padding:24px;font-family:var(--wide);font-stretch:125%;font-weight:900;font-size:1.2rem;text-transform:uppercase;color:var(--line)}
 }
 @media (prefers-reduced-motion:reduce){.meter .hit{transition:none}}
+
+/* the holographic pieces */
+.brand,.title,.status .score,.code-in{background:var(--holo);-webkit-background-clip:text;background-clip:text;color:transparent}
+.btn,.pad button.jump{background:var(--holo);border-color:transparent}
+.btn:active{background:var(--cream)}
+.btn-ghost{background:transparent;border-color:var(--line)}
+.btn-ghost:active{background:var(--cream);color:#000}
+header{border-bottom:0;background:var(--holo) bottom/100% 1.5px no-repeat}
+.card{border:1.5px solid transparent;border-image:var(--holo) 1}
+.hearts .on{fill:var(--pink)}
+.hint{color:var(--pink)}
+.pill.bad{color:var(--pink);border-color:var(--pink)}.pill.bad i{background:var(--pink)}
+.code-in{caret-color:var(--cream)}
 </style>
 </head>
 <body>
@@ -129,7 +148,7 @@ input[type=range]{width:100%;accent-color:var(--lime)}
         <h1 class="title">Be the snake</h1>
       </div>
       <div class="hold">
-        <svg viewBox="0 0 72 72" aria-hidden="true"><rect x="22" y="8" width="28" height="52" rx="6" fill="none" stroke="#d6f25c" stroke-width="3" transform="rotate(-14 36 34)"/><path d="M12 54c4 6 12 6 16 0M44 54c4 6 12 6 16 0" fill="none" stroke="#a29fb8" stroke-width="2.4" stroke-linecap="round"/><path d="M8 30l-4 4 4 4M64 30l4 4-4 4" fill="none" stroke="#ff5c8a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg viewBox="0 0 72 72" aria-hidden="true"><rect x="22" y="8" width="28" height="52" rx="6" fill="none" stroke="#ff4fd8" stroke-width="2" transform="rotate(-14 36 34)"/><path d="M12 54c4 6 12 6 16 0M44 54c4 6 12 6 16 0" fill="none" stroke="#9893ad" stroke-width="1.5" stroke-linecap="round"/><path d="M8 30l-4 4 4 4M64 30l4 4-4 4" fill="none" stroke="#5ff0ff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <div class="desc"><b>Hold it upright like a remote</b>, screen toward you and tipped back a little. Tip a little for a gentle curve, more for a tight one. Jump for real to jump (keep a good grip).</div>
       </div>
       <button class="btn" id="motionBtn">Enable motion</button>
@@ -161,11 +180,13 @@ input[type=range]{width:100%;accent-color:var(--lime)}
     <button class="btn" id="goBtn" hidden>Start</button>
     <div class="gauge" id="gauge">
       <svg viewBox="0 0 320 150" aria-hidden="true">
-        <path id="arcBase" d="M40 140 A120 120 0 0 1 280 140" fill="none" stroke="rgba(244,243,255,.16)" stroke-width="18" stroke-linecap="butt"/>
-        <path id="zoneL" fill="none" stroke="#d6f25c" stroke-width="18" stroke-linecap="butt" opacity=".25"/>
-        <path id="zoneR" fill="none" stroke="#d6f25c" stroke-width="18" stroke-linecap="butt" opacity=".25"/>
-        <line id="needle" x1="160" y1="140" x2="160" y2="38" stroke="#ff5c8a" stroke-width="6" stroke-linecap="butt"/>
-        <rect x="150" y="130" width="20" height="20" fill="#f4f3ff"/>
+        <path id="arcBase" d="M40 140 A120 120 0 0 1 280 140" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.5" stroke-linecap="butt"/>
+        <defs><linearGradient id="holoG" x1="40" x2="280" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#5ff0ff"/><stop offset=".26" stop-color="#8a7bff"/><stop offset=".5" stop-color="#ff4fd8"/><stop offset=".75" stop-color="#ffe94d"/><stop offset="1" stop-color="#7dff5a"/></linearGradient></defs>
+        <path id="zoneL" fill="none" stroke="url(#holoG)" stroke-width="12" stroke-linecap="butt" opacity=".25"/>
+        <path id="zoneR" fill="none" stroke="url(#holoG)" stroke-width="12" stroke-linecap="butt" opacity=".25"/>
+        <line id="needle" x1="160" y1="140" x2="160" y2="38" stroke="#ffffff" stroke-width="2" stroke-linecap="butt"/>
+        <circle cx="160" cy="140" r="7" fill="#000" stroke="#ffffff" stroke-width="1.5"/>
+        <path id="star" d="M0-9l2.2 6.8 6.8 2.2-6.8 2.2L0 9l-2.2-6.8-6.8-2.2 6.8-2.2z" fill="#ffe94d" transform="translate(160 38)"/>
       </svg>
       <div class="lab" id="gaugeLab">Straight</div>
     </div>
@@ -376,6 +397,7 @@ function drawFrame(){
   const deg = Math.max(-SPAN, Math.min(SPAN, rel));
   const [nx, ny] = pt(deg);
   $('needle').setAttribute('x2', (CX + (nx - CX)*0.85).toFixed(1)); $('needle').setAttribute('y2', (CY + (ny - CY)*0.85).toFixed(1));
+  $('star').setAttribute('transform', `translate(${(CX + (nx - CX)*0.85).toFixed(1)} ${(CY + (ny - CY)*0.85).toFixed(1)})`);
   const v = currentSteer();
   $('zoneL').setAttribute('opacity', 0.25 + 0.75*Math.max(0, -v)); $('zoneR').setAttribute('opacity', 0.25 + 0.75*Math.max(0, v));
   $('gaugeLab').textContent = tooSteep && !btnV ? 'Tip the top back a little' : Math.abs(v) < 0.02 ? 'Straight' : `${v < 0 ? 'Left' : 'Right'} ${Math.round(Math.abs(v)*100)}%`;
@@ -386,15 +408,15 @@ function drawFrame(){
   const now = performance.now(), th = thresholds(), top = 3, y = g => h - 6 - (Math.min(top, g)/top)*(h - 14), x = t => w - (now - t)/3000*w;
   const line = (g, color, dash) => { sctx.strokeStyle = color; sctx.setLineDash(dash); sctx.beginPath(); sctx.moveTo(0, y(g)); sctx.lineTo(w, y(g)); sctx.stroke(); };
   sctx.lineWidth = 1;
-  line(1, 'rgba(244,243,255,.3)', [3, 4]);
-  line(th.spike, 'rgba(255,92,138,.7)', [2, 3]);
-  line(th.low, 'rgba(214,242,92,.6)', [2, 3]);
+  line(1, 'rgba(255,255,255,.35)', [3, 4]);
+  line(th.spike, 'rgba(255,79,216,.85)', [2, 3]);
+  line(th.low, 'rgba(125,255,90,.75)', [2, 3]);
   sctx.setLineDash([]);
   while (marks.length && marks[0] < now - 3000) marks.shift();
-  sctx.fillStyle = 'rgba(214,242,92,.25)';
+  sctx.fillStyle = 'rgba(95,240,255,.2)';
   for (const t of marks) sctx.fillRect(x(t) - 3, 0, 6, h);
   if (hist.length > 1){
-    sctx.strokeStyle = '#f4f3ff'; sctx.lineWidth = 2; sctx.lineJoin = 'miter'; sctx.beginPath();
+    sctx.strokeStyle = '#ffffff'; sctx.lineWidth = 1.6; sctx.lineJoin = 'miter'; sctx.beginPath();
     hist.forEach((p, i) => i ? sctx.lineTo(x(p.t), y(p.m)) : sctx.moveTo(x(p.t), y(p.m)));
     sctx.stroke();
   }

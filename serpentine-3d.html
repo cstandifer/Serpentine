@@ -9,7 +9,7 @@
 <title>Serpentine 3D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Space+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Azeret+Mono:wght@400;600&display=swap">
 <!-- phone link (PeerJS) and QR code; the game still runs if these fail to load -->
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -20,187 +20,222 @@ body{margin:0;font-size:14px}
 [hidden]{display:none!important}
 </style>
 <style>
-/* Night rave poster.
-   Black stock, paper-white type, condensed headlines printed slightly off-register.
-   Acid lime marks what's selected; hot pink is the one thing to press. No rounded corners anywhere.
-   The 3D world keeps its own per-level colors; this sheet only dresses the UI around it. */
+/* Serpentine: a rave flyer. The structure comes from a grid poster (thin rules, black ground, wide type
+   with an outlined echo); the color is holographic, a cyan-violet-pink-yellow-lime sweep used for the
+   things that matter: the title, what's selected, the button to press, and the grid of the game floor.
+   Everything else is white line work. The 3D world uses the same palette (see STAGES and the snake colors). */
 :root{
   --night:#000;
-  --paper:#f4f3ff;
-  --lime:#d6f25c;
-  --pink:#ff5c8a;
-  --ribbon:#ffb547;
-  --ribbon-side:#c56f1c;
-  --classic:#ffb547;
-  --classic-side:#c56f1c;
-  --glider:#efe3ff;
-  --glider-side:#9a82d6;
-  --magnet:#d6f25c;
-  --magnet-side:#7f9a22;
-  --comet:#ff7a59;
-  --comet-side:#a83a22;
-  --hurdle:#4fd1c5;
-  --hurdle-side:#23847c;
-  --pillar:#ff5c8a;
-  --pillar-side:#a92a55;
-  --wall:#7563ad;
-  --wall-side:#3d3068;
-  --gem:#9fd7ff;
-  --ink:#f4f3ff;
-  --muted:#a29fb8;
-  --panel:#000;
-  --rule:rgba(244,243,255,.28);
-  --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
-  --body:"Space Mono",ui-monospace,Menlo,Consolas,monospace;
+  --black:#000;
+  --cream:#f6f4ff;
+  --line:rgba(255,255,255,.88);
+  --cyan:#5ff0ff;
+  --violet:#8a7bff;
+  --pink:#ff4fd8;
+  --yellow:#ffe94d;
+  --lime:#7dff5a;
+  --holo:linear-gradient(110deg,#5ff0ff 0%,#8a7bff 26%,#ff4fd8 50%,#ffe94d 75%,#7dff5a 100%);
+  --muted:#9893ad;
+  --rule:rgba(255,255,255,.4);
+  --rule-soft:rgba(255,255,255,.16);
+  /* world pieces: pillars are the orange danger blocks, hurdles are lime, gems lilac */
+  --classic:#ffe94d;
+  --classic-side:#a8960f;
+  --glider:#9a8cff;
+  --glider-side:#4b3fa8;
+  --magnet:#ff8a3d;
+  --magnet-side:#a8461a;
+  --comet:#ffffff;
+  --comet-side:#8e8aa8;
+  --hurdle:#7dff5a;
+  --hurdle-side:#2f8f1f;
+  --pillar:#ff4fd8;
+  --pillar-side:#8f1a78;
+  --wall:#141218;
+  --wall-side:#000;
+  --gem:#5ff0ff;
+  --ink:#f6f4ff;
+  --wide:"Archivo","Arial Black",sans-serif;
+  --mono:"Azeret Mono",ui-monospace,Menlo,Consolas,monospace;
   color-scheme:dark;
 }
 html,body{height:100%;overscroll-behavior:none}
-body{background:var(--night);color:var(--ink);font-family:var(--body);font-size:13px;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-text-size-adjust:100%}
+body{background:#000;color:var(--cream);font-family:var(--mono);font-size:12px;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-text-size-adjust:100%}
 button{touch-action:manipulation;font:inherit}
-:focus-visible{outline:3px solid var(--lime);outline-offset:3px}
+:focus-visible{outline:2px solid var(--lime);outline-offset:3px}
+.wide,.title,.score,.btn,.big{font-family:var(--wide);font-stretch:125%;font-weight:900;text-transform:uppercase;letter-spacing:.005em}
 
-/* stage: the WebGL world fills the screen; in 3D views the top-down canvas becomes a minimap */
 #stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 #world{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
 #world[hidden]{display:none}
-.vig{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(0,0,0,.6))}
-#stage.mini{inset:auto;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);border:2px solid var(--paper);cursor:default}
+.vig{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 50%,rgba(0,0,0,.6))}
+#stage.mini{inset:auto;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);border:1.5px solid var(--line);cursor:default}
 #stage.mini.duo{right:auto;left:50%;transform:translateX(-50%)}
 
 /* solo HUD */
-.hud{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:calc(env(safe-area-inset-top,0px) + 14px) 16px 0;pointer-events:none}
-.score{font-family:var(--display);font-weight:900;font-size:3.2rem;line-height:.85;font-variant-numeric:tabular-nums;color:var(--paper);text-shadow:3px 3px 0 var(--pink)}
-.sub{font-size:.75rem;color:var(--paper);margin-top:10px;font-variant-numeric:tabular-nums;text-shadow:0 1px 2px #000}
-.goal{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.75rem;font-weight:700;color:var(--lime);font-variant-numeric:tabular-nums;text-shadow:0 1px 2px #000}
-.goal-bar{width:110px;height:10px;border:2px solid var(--paper);background:#000}
-.goal-bar i{display:block;height:100%;width:0;background:var(--lime);transition:width .2s}
+.hud{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:calc(env(safe-area-inset-top,0px) + 16px) 18px 0;pointer-events:none}
+.score{font-size:2.6rem;line-height:.85;font-variant-numeric:tabular-nums;color:var(--line)}
+.sub{font-size:.72rem;color:var(--cream);margin-top:10px;font-variant-numeric:tabular-nums}
+.goal{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.72rem;color:var(--cream);font-variant-numeric:tabular-nums}
+.goal-bar{width:110px;height:8px;border:1.5px solid var(--line)}
+.goal-bar i{display:block;height:100%;width:0;background:var(--line);transition:width .2s}
 .lives{display:flex;gap:4px;margin-top:8px}
-.lives svg{width:16px;height:16px}
-.lives .on{fill:var(--pink)}
+.lives svg{width:15px;height:15px}
+.lives .on{fill:var(--line)}
 .lives .off{fill:none;stroke:var(--muted);stroke-width:1.6}
 .hud-btns{display:flex;gap:8px;pointer-events:auto;margin-left:auto}
-.icon-btn{width:44px;height:44px;display:grid;place-items:center;border:2px solid var(--paper);background:#000;color:var(--paper);cursor:pointer;padding:0}
-.icon-btn:active{background:var(--paper);color:#000}
-.icon-btn svg{width:20px;height:20px}
-.chip{display:inline-flex;align-items:center;gap:7px;margin-top:10px;padding:4px 8px;font-size:.7rem;background:#000;border:1px solid var(--rule);color:var(--muted)}
-.chip i{width:8px;height:8px;background:var(--muted)}
+.icon-btn{width:42px;height:42px;display:grid;place-items:center;border:1.5px solid var(--line);background:#000;color:var(--cream);cursor:pointer;padding:0}
+.icon-btn:active{background:var(--line);color:#000}
+.icon-btn svg{width:18px;height:18px}
+.chip{display:inline-flex;align-items:center;gap:7px;margin-top:10px;padding:4px 8px;font-size:.68rem;background:#000;border:1px solid var(--rule-soft);color:var(--muted)}
+.chip i{width:7px;height:7px;border-radius:50%;background:var(--muted)}
 .chip.on{color:var(--lime);border-color:var(--lime)}
 .chip.on i{background:var(--lime)}
 
-/* versus: a black divider down the middle, each half with its own scoreboard, the clock on top */
-.split{position:fixed;top:0;bottom:0;left:50%;width:6px;transform:translateX(-50%);background:#000;pointer-events:none}
+/* versus */
+.split{position:fixed;top:0;bottom:0;left:50%;width:4px;transform:translateX(-50%);background:#000;border-left:1px solid var(--line);border-right:1px solid var(--line);pointer-events:none}
 .duo{position:fixed;inset:0;pointer-events:none}
-.duo-p{position:absolute;top:calc(env(safe-area-inset-top,0px) + 14px);display:flex;align-items:center;gap:10px}
-#duo0{left:16px}#duo1{left:calc(50% + 72px)}
-.duo-p .tag{font-family:var(--display);font-weight:900;font-size:1.1rem;color:#000;padding:2px 8px;border:2px solid #000}
-.duo-p .sc{font-family:var(--display);font-weight:900;font-size:2.8rem;line-height:.85;font-variant-numeric:tabular-nums;color:var(--paper);text-shadow:3px 3px 0 #000}
-.duo-p .hearts{display:flex;gap:3px}.duo-p .hearts svg{width:15px;height:15px}
-.duo-p .hearts .on{fill:var(--pink)}.duo-p .hearts .off{fill:none;stroke:var(--muted);stroke-width:1.6}
-.duo-t{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px);left:50%;transform:translateX(-50%);font-family:var(--display);font-weight:900;font-size:2rem;line-height:1;padding:4px 14px;background:#000;border:2px solid var(--paper);font-variant-numeric:tabular-nums}
-.duo-t.hurry{color:#000;background:var(--pink);border-color:var(--pink)}
-.duo-msg{position:absolute;top:42%;transform:translateX(-50%);font-family:var(--display);font-weight:900;font-size:clamp(2rem,5vw,4rem);text-transform:uppercase;line-height:.9;color:var(--paper);text-shadow:4px 4px 0 var(--pink)}
+.duo-p{position:absolute;top:calc(env(safe-area-inset-top,0px) + 16px);display:flex;align-items:center;gap:10px}
+#duo0{left:18px}#duo1{left:calc(50% + 78px)}
+.duo-p .tag{font-family:var(--wide);font-stretch:125%;font-weight:900;font-size:.85rem;color:#000;padding:3px 7px}
+.duo-p .sc{font-family:var(--wide);font-stretch:125%;font-weight:900;font-size:2.3rem;line-height:.85;font-variant-numeric:tabular-nums;color:var(--cream)}
+.duo-p .hearts{display:flex;gap:3px}.duo-p .hearts svg{width:14px;height:14px}
+.duo-p .hearts .on{fill:var(--line)}.duo-p .hearts .off{fill:none;stroke:var(--muted);stroke-width:1.6}
+.duo-t{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px);left:50%;transform:translateX(-50%);font-family:var(--wide);font-stretch:125%;font-weight:900;font-size:1.5rem;line-height:1;padding:7px 12px;background:#000;border:1.5px solid var(--line);color:var(--cream);font-variant-numeric:tabular-nums}
+.duo-t.hurry{color:#000;background:var(--line)}
+.duo-msg{position:absolute;top:42%;transform:translateX(-50%);font-family:var(--wide);font-stretch:125%;font-weight:900;font-size:clamp(1.4rem,3.4vw,2.6rem);text-transform:uppercase;color:transparent;-webkit-text-stroke:1.5px var(--cream);white-space:nowrap}
 #duoMsg0{left:25%}#duoMsg1{left:75%}
-.waitbar{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 74px);transform:translateX(-50%);z-index:10;display:flex;align-items:center;gap:10px;padding:9px 14px;background:#000;border:2px solid var(--lime);color:var(--lime);font-weight:700;font-size:.8rem;white-space:nowrap}
-.waitbar i{width:10px;height:10px;background:var(--lime);animation:blink 1s steps(2,jump-none) infinite}
+.waitbar{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 74px);transform:translateX(-50%);z-index:10;display:flex;align-items:center;gap:10px;padding:9px 14px;background:#000;border:1.5px solid var(--lime);color:var(--lime);font-size:.75rem;white-space:nowrap}
+.waitbar i{width:8px;height:8px;border-radius:50%;background:var(--lime);animation:blink 1s steps(2,jump-none) infinite}
 .waitbar.nudge{animation:nudge .4s steps(4)}
 @keyframes blink{50%{opacity:0}}
 @keyframes nudge{25%{transform:translateX(calc(-50% - 8px))}75%{transform:translateX(calc(-50% + 8px))}}
 
-/* cards: menu, level clear, game over, versus result, pause */
-.overlay{position:fixed;inset:0;display:flex;overflow-y:auto;padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px);background:rgba(0,0,0,.55)}
-.card{width:min(100%,420px);margin:auto;background:#000;border:2px solid var(--paper);padding:24px 22px 26px;display:grid;gap:22px}
-.eyebrow{font-size:.75rem;font-weight:700;color:var(--lime)}
-.title{font-family:var(--display);font-weight:900;font-size:clamp(3rem,15vw,5rem);line-height:.8;letter-spacing:-.005em;text-transform:uppercase;margin:6px 0 0;color:var(--lime);text-shadow:5px 5px 0 var(--pink);text-wrap:balance;overflow-wrap:break-word}
-/* the game's name always sits on one line, as wide as the card allows */
-#menu .title{font-size:clamp(3rem,16.5vw,5.2rem);white-space:nowrap}
-.desc{font-size:.78rem;line-height:1.6;color:var(--muted)}
-.desc b{color:var(--paper);font-weight:700}
+/* cards: thin orange frame; each setup step below the title is a numbered row divided by an orange rule */
+.overlay{position:fixed;inset:0;display:flex;overflow-y:auto;padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px);background:rgba(0,0,0,.5)}
+.card{width:min(100%,440px);margin:auto;background:#000;border:1.5px solid var(--line);padding:22px 22px 24px;display:grid;gap:18px;counter-reset:step}
+.eyebrow{font-size:.72rem;color:var(--muted)}
+.title{font-size:clamp(1.7rem,7vw,2.2rem);line-height:.95;margin:6px 0 0;color:var(--line);text-wrap:balance}
+/* the game's name: solid on top, an outlined echo underneath, then a row of phases like the flyer's moons */
+.mast{display:grid;gap:0}
+.mast .title{font-size:clamp(2rem,10.4vw,2.85rem);white-space:nowrap;margin:8px 0 0;line-height:.88}
+.mast .echo{font-family:var(--wide);font-stretch:125%;font-weight:900;text-transform:uppercase;font-size:clamp(2rem,10.4vw,2.85rem);line-height:.88;white-space:nowrap;color:transparent;-webkit-text-stroke:1.2px var(--line)}
+.phases{display:block;width:100%;height:22px;margin-top:14px}
+.desc{font-size:.74rem;line-height:1.6;color:var(--muted)}
+.desc b{color:var(--cream);font-weight:600}
+.pick{display:grid;gap:9px;border-top:1.5px solid var(--rule);padding-top:12px}
+.pick > .eyebrow{color:var(--cream)}
+.pick > .eyebrow::before{counter-increment:step;content:counter(step, decimal-leading-zero) "/ ";color:var(--line)}
 
-.how summary{list-style:none;display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border:2px solid var(--paper);font-family:var(--display);font-weight:900;font-size:1.35rem;text-transform:uppercase;cursor:pointer}
+.how summary{list-style:none;display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border:1.5px solid var(--rule);font-family:var(--wide);font-stretch:125%;font-weight:800;font-size:.85rem;text-transform:uppercase;cursor:pointer}
+.how summary:hover{border-color:var(--line)}
 .how summary::-webkit-details-marker{display:none}
-.how summary::after{content:"+";color:var(--lime)}
-.how[open] summary{background:var(--paper);color:#000}
-.how[open] summary::after{content:"\2212";color:#000}
+.how summary::after{content:"+";color:var(--line);font-size:1.1rem}
+.how[open] summary::after{content:"\2212"}
 .rules{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:12px}
-.rules li{display:grid;grid-template-columns:38px 1fr;gap:12px;align-items:center;font-size:.8rem;line-height:1.5}
-.rules b{font-weight:700;color:var(--lime)}
-.glyph{width:38px;height:38px;display:grid;place-items:center;border:1px solid var(--rule)}
-.glyph svg{width:26px;height:26px}
+.rules li{display:grid;grid-template-columns:36px 1fr;gap:12px;align-items:center;font-size:.74rem;line-height:1.55;color:var(--muted)}
+.rules b{font-weight:600;color:var(--cream)}
+.glyph{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--rule-soft)}
+.glyph svg{width:24px;height:24px}
 
-/* pickers: outlined tiles; the chosen one goes solid lime */
-.pick{display:grid;gap:9px}
 .seg{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:6px}
 .opt{position:relative;display:block;min-width:0}
 .opt input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:1}
 .opt input:disabled{cursor:not-allowed}
-.opt span{display:grid;justify-items:center;align-content:center;gap:3px;min-height:56px;padding:7px 4px;border:2px solid var(--rule);text-align:center;color:var(--paper)}
-.opt:hover span{border-color:var(--paper)}
-.opt b{font-family:var(--display);font-weight:900;font-size:1.15rem;line-height:.95;text-transform:uppercase}
-.opt .num{font-size:1.7rem}
-.opt small{font-size:.62rem;color:var(--muted);font-variant-numeric:tabular-nums}
-.opt .sn{width:24px;height:24px}
-.opt .lock{display:none;width:16px;height:16px}
+.opt span{display:grid;justify-items:center;align-content:center;gap:4px;min-height:54px;padding:7px 4px;border:1.5px solid var(--rule-soft);text-align:center;color:var(--cream)}
+.opt:hover span{border-color:var(--line)}
+.opt b{font-family:var(--wide);font-stretch:125%;font-weight:800;font-size:.72rem;line-height:1;text-transform:uppercase}
+.opt .num{font-size:1.5rem;font-weight:900;color:transparent;-webkit-text-stroke:1.2px var(--cream)}
+.opt small{font-size:.6rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.opt .sn{width:22px;height:22px}
+.opt .lock{display:none;width:15px;height:15px;color:var(--muted)}
 .opt.locked .num{display:none}
 .opt.locked .lock{display:block}
-.opt.locked span{opacity:.35}
-.opt input:checked + span{background:var(--lime);border-color:var(--lime);color:#000}
+.opt.locked span{opacity:.4}
+.opt input:checked + span{background:var(--line);border-color:var(--line);color:#000}
+.opt input:checked + span .num{color:#000;-webkit-text-stroke:0}
 .opt input:checked + span small{color:#000}
-.opt input:focus-visible + span{outline:3px solid var(--paper);outline-offset:3px}
+.opt input:focus-visible + span{outline:2px solid var(--lime);outline-offset:3px}
 
-/* buttons: the main action is a pink block with a hard lime shadow; it presses down into the shadow */
-.btn{font-family:var(--display);font-weight:900;font-size:1.7rem;line-height:1;text-transform:uppercase;letter-spacing:.01em;background:var(--pink);color:#000;border:2px solid #000;padding:12px 18px;cursor:pointer;box-shadow:6px 6px 0 var(--lime);transition:transform .06s,box-shadow .06s}
-.btn:active{transform:translate(4px,4px);box-shadow:2px 2px 0 var(--lime)}
-.btn-ghost{background:transparent;color:var(--paper);border:2px solid var(--paper);box-shadow:none;font-size:1.15rem;padding:10px 16px}
-.btn-ghost:active{transform:none;box-shadow:none;background:var(--paper);color:#000}
-.btn.waiting{background:transparent;color:var(--muted);border:2px dashed var(--muted);box-shadow:none;cursor:default;font-size:1.25rem}
-.actions{display:grid;gap:12px}
-.hint{font-size:.7rem;color:var(--muted);text-align:center;margin-top:-6px}
+/* buttons: the action is a solid orange slab; secondary actions are orange outlines */
+.btn{font-size:1.25rem;line-height:1;background:var(--line);color:#000;border:0;padding:18px 18px 17px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:left}
+.btn::after{content:"";flex:none;width:18px;height:18px;background:#000;clip-path:polygon(50% 0,59% 41%,100% 50%,59% 59%,50% 100%,41% 59%,0 50%,41% 41%)}
+.btn:active{background:var(--cream)}
+.btn-ghost{background:transparent;color:var(--cream);border:1.5px solid var(--line);font-size:.8rem;padding:13px 16px;justify-content:center;text-align:center}
+.btn-ghost::after{display:none}
+.btn-ghost:active{background:var(--line);color:#000}
+.btn.waiting{background:transparent;color:var(--muted);border:1.5px dashed var(--muted);cursor:default;font-size:.95rem}
+.btn.waiting::after{background:var(--muted)}
+.actions{display:grid;gap:10px}
+.hint{font-size:.66rem;color:var(--muted);text-align:center;margin-top:-4px}
 .hint-touch{display:none}
 @media (hover:none) and (pointer:coarse){.hint-kb{display:none}.hint-touch{display:inline}}
 
-.big{font-family:var(--display);font-weight:900;font-size:clamp(4.5rem,24vw,7rem);line-height:.8;color:var(--lime);font-variant-numeric:tabular-nums;text-shadow:5px 5px 0 var(--pink)}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:2px solid var(--paper);padding-top:14px}
+.big{font-size:clamp(3.4rem,15vw,4.6rem);line-height:.85;color:var(--line);font-variant-numeric:tabular-nums}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:1.5px solid var(--rule);padding-top:12px}
 .stat{min-width:0}
-.stat .v{font-family:var(--display);font-weight:900;font-size:2.1rem;line-height:1;font-variant-numeric:tabular-nums}
-.stat .k{font-size:.68rem;color:var(--muted);margin-top:4px}
-.badge{justify-self:start;font-size:.72rem;font-weight:700;color:#000;background:var(--lime);padding:3px 8px}
+.stat .v{font-family:var(--wide);font-stretch:125%;font-weight:900;font-size:1.5rem;line-height:1;font-variant-numeric:tabular-nums}
+.stat .k{font-size:.64rem;color:var(--muted);margin-top:5px}
+.badge{justify-self:start;font-size:.68rem;color:#000;background:var(--lime);padding:3px 8px}
 
-/* phone link box on the menu */
-.phone{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;padding:12px;border:2px solid var(--rule)}
-.qr{width:112px;height:112px;padding:6px;background:var(--paper);display:grid;place-items:center}
-.qr img,.qr canvas{width:100px!important;height:100px!important;image-rendering:pixelated}
-.qr.off{background:transparent;border:2px dashed var(--rule)}
-.phone .code{font-family:var(--display);font-weight:900;font-size:2.6rem;line-height:.85;color:var(--lime);letter-spacing:.06em}
-.phone .desc{margin-top:8px;font-size:.72rem}
-.phone .desc a{color:var(--paper);word-break:break-all}
+.phone{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center;padding:12px;border:1.5px solid var(--rule-soft)}
+.qr{width:108px;height:108px;padding:5px;background:var(--cream);display:grid;place-items:center}
+.qr img,.qr canvas{width:98px!important;height:98px!important;image-rendering:pixelated}
+.qr.off{background:transparent;border:1.5px dashed var(--rule-soft)}
+.phone .code{font-family:var(--wide);font-stretch:125%;font-weight:900;font-size:1.9rem;line-height:1;color:var(--line);letter-spacing:.04em}
+.phone .desc{margin-top:8px;font-size:.66rem}
+.phone .desc a{color:var(--cream);word-break:break-all}
 
-/* leaderboard: ruled rows like a club night's set times; the newest entry goes lime */
-.board{list-style:none;margin:12px 0 0;padding:0;display:grid;border-top:2px solid var(--paper)}
-.board li{display:grid;grid-template-columns:30px 22px minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 4px;border-bottom:1px solid var(--rule);font-variant-numeric:tabular-nums}
-.board .r{font-family:var(--display);font-weight:900;font-size:1.4rem;line-height:1;color:var(--muted);text-align:right}
-.board li:first-child .r{color:var(--lime)}
-.board .n{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* leaderboard: ruled rows like the flyer's line-up */
+.board{list-style:none;margin:12px 0 0;padding:0;display:grid;border-top:1.5px solid var(--line)}
+.board li{display:grid;grid-template-columns:28px 20px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 2px;border-bottom:1px solid var(--rule-soft);font-variant-numeric:tabular-nums}
+.board .r{font-family:var(--wide);font-stretch:125%;font-weight:900;font-size:.95rem;color:var(--muted)}
+.board li:first-child .r{color:var(--line)}
+.board .n{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .board .n small{font-weight:400;color:var(--muted);margin-left:6px}
-.board .s{font-family:var(--display);font-weight:900;font-size:1.5rem;line-height:1}
-.board .sn{width:20px;height:20px;display:block}
-.board li.me{background:var(--lime);color:#000}
+.board .s{font-family:var(--wide);font-stretch:125%;font-weight:900;font-size:1.05rem}
+.board .sn{width:18px;height:18px;display:block}
+.board li.me{background:var(--line);color:#000;padding-left:6px;padding-right:6px}
 .board li.me .r,.board li.me small{color:#000}
-.board-empty{margin-top:12px;font-size:.75rem;color:var(--muted)}
+.board-empty{margin-top:12px;font-size:.7rem;color:var(--muted)}
 .board-head{display:flex;justify-content:space-between;align-items:baseline;margin-top:2px}
-.entry{display:grid;gap:10px;padding:14px;border:2px solid var(--lime)}
+.entry{display:grid;gap:10px;padding:14px;border:1.5px solid var(--lime)}
+.entry .eyebrow{color:var(--lime)!important}
 .entry .row{display:grid;grid-template-columns:1fr auto;gap:8px}
-.name-in{min-width:0;font-family:var(--display);font-weight:900;font-size:1.7rem;text-transform:uppercase;padding:6px 10px;border:2px solid var(--paper);background:#000;color:var(--paper);outline:none;-webkit-user-select:text;user-select:text}
+.name-in{min-width:0;font-family:var(--wide);font-stretch:125%;font-weight:900;font-size:1.1rem;text-transform:uppercase;padding:8px 10px;border:1.5px solid var(--cream);background:#000;color:var(--cream);outline:none;-webkit-user-select:text;user-select:text}
 .name-in:focus{border-color:var(--lime)}
-.entry .btn{padding:8px 14px;font-size:1.3rem;box-shadow:4px 4px 0 var(--lime)}
+.entry .btn{padding:10px 14px;font-size:.9rem}
+.entry .btn::after{display:none}
 
-/* versus result: the winner's column gets a solid block shadow in their snake's color */
-.vs{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.vs-p{padding:12px;border:2px solid var(--rule);display:grid;gap:6px}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.vs-p{padding:12px;border:1.5px solid var(--rule-soft);display:grid;gap:6px}
 .vs-p .eyebrow{color:currentColor}
-.vs-p .v{font-family:var(--display);font-weight:900;font-size:3rem;line-height:.85;font-variant-numeric:tabular-nums}
-.vs-p small{font-size:.68rem;color:var(--muted)}
-.vs-p.win{border-color:currentColor;box-shadow:6px 6px 0 currentColor}
-@media (prefers-reduced-motion:reduce){.btn,.goal-bar i{transition:none}.waitbar i,.waitbar.nudge{animation:none}}
+.vs-p .v{font-family:var(--wide);font-stretch:125%;font-weight:900;font-size:2.2rem;line-height:.9;font-variant-numeric:tabular-nums}
+.vs-p small{font-size:.64rem;color:var(--muted)}
+.vs-p.win{border-color:currentColor}
+@media (prefers-reduced-motion:reduce){.goal-bar i{transition:none}.waitbar i,.waitbar.nudge{animation:none}}
+
+/* ---- the holographic pieces ---- */
+.holo-text,.title,.score,.big,.phone .code{background:var(--holo);-webkit-background-clip:text;background-clip:text;color:transparent}
+.mast .echo{-webkit-text-stroke:1.2px var(--line)}
+.card{border:1.5px solid transparent;border-image:var(--holo) 1}
+.pick{border-top:1px solid var(--rule-soft)}
+.pick > .eyebrow::before{color:var(--pink)}
+.opt input:checked + span{background:var(--holo);border-color:transparent}
+.btn{background:var(--holo)}
+.btn::after{background:#000}
+.btn:active{background:var(--cream)}
+.btn-ghost{background:transparent}
+.btn-ghost:active{background:var(--cream)}
+.goal-bar i{background:var(--holo)}
+.board{border-top:0;background:var(--holo) top/100% 1.5px no-repeat;padding-top:1.5px}
+.board li:first-child .r{background:var(--holo);-webkit-background-clip:text;background-clip:text;color:transparent}
+.board li.me{background:var(--holo)}
+.split{background:linear-gradient(180deg,#5ff0ff,#8a7bff,#ff4fd8,#ffe94d,#7dff5a);border:0;width:3px}
+.duo-t.hurry{background:var(--pink);border-color:var(--pink)}
+.lives .on,.duo-p .hearts .on{fill:var(--pink)}
+.how summary::after{color:var(--pink)}
+.entry{border-color:var(--lime)}
 </style>
 </head>
 <body>
@@ -236,15 +271,22 @@ button{touch-action:manipulation;font:inherit}
 <div class="overlay" id="menu">
   <div class="card">
     <div>
-      <div class="eyebrow">A rhythm snake</div>
-      <h1 class="title">Serpentine</h1>
+      <div class="eyebrow">A rhythm snake for big screens</div>
+      <div class="mast">
+        <h1 class="title">Serpentine</h1>
+        <div class="echo" aria-hidden="true">Serpentine</div>
+        <svg class="phases" viewBox="0 0 396 22" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <defs><linearGradient id="holoPh" x1="0" x2="396" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#5ff0ff"/><stop offset=".26" stop-color="#8a7bff"/><stop offset=".5" stop-color="#ff4fd8"/><stop offset=".75" stop-color="#ffe94d"/><stop offset="1" stop-color="#7dff5a"/></linearGradient></defs>
+          <g fill="url(#holoPh)"><ellipse cx="14" cy="11" rx="2.5" ry="10"/><ellipse cx="54" cy="11" rx="5.5" ry="10"/><ellipse cx="96" cy="11" rx="8" ry="10"/><ellipse cx="140" cy="11" rx="9.5" ry="10"/><circle cx="198" cy="11" r="10"/><ellipse cx="256" cy="11" rx="9.5" ry="10"/><ellipse cx="300" cy="11" rx="8" ry="10"/><ellipse cx="342" cy="11" rx="5.5" ry="10"/><ellipse cx="382" cy="11" rx="2.5" ry="10"/></g>
+        </svg>
+      </div>
     </div>
     <details class="how" id="how">
       <summary>How to play</summary>
       <ul class="rules">
-        <li><span class="glyph"><svg viewBox="0 0 26 26" style="fill:none;stroke:var(--ribbon);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round"><path d="M4 20h9V7"/><path d="M9 11l4-4 4 4"/></svg></span><span><b>Tilt your phone</b> to steer: a little for a gentle curve, more for a tight one. No phone? Hold the arrow keys or drag sideways.</span></li>
-        <li><span class="glyph"><svg viewBox="0 0 26 26"><rect x="5" y="9" width="16" height="6" style="fill:var(--hurdle)"/><rect x="5" y="15" width="16" height="4" style="fill:var(--hurdle-side)"/></svg></span><span><b>Jump</b> (for real, holding the phone) to clear low teal hurdles. Space or a tap works too.</span></li>
-        <li><span class="glyph"><svg viewBox="0 0 26 26"><rect x="8" y="3" width="10" height="8" style="fill:var(--pillar)"/><rect x="8" y="11" width="10" height="12" style="fill:var(--pillar-side)"/></svg></span><span>Rose pillars are too tall to jump. <b>Steer around them.</b></span></li>
+        <li><span class="glyph"><svg viewBox="0 0 26 26" style="fill:none;stroke:var(--cyan);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round"><path d="M4 20h9V7"/><path d="M9 11l4-4 4 4"/></svg></span><span><b>Tilt your phone</b> to steer: a little for a gentle curve, more for a tight one. No phone? Hold the arrow keys or drag sideways.</span></li>
+        <li><span class="glyph"><svg viewBox="0 0 26 26"><rect x="5" y="9" width="16" height="6" style="fill:var(--hurdle)"/><rect x="5" y="15" width="16" height="4" style="fill:var(--hurdle-side)"/></svg></span><span><b>Jump</b> (for real, holding the phone) to clear low lime hurdles. Space or a tap works too.</span></li>
+        <li><span class="glyph"><svg viewBox="0 0 26 26"><rect x="8" y="3" width="10" height="8" style="fill:var(--pillar)"/><rect x="8" y="11" width="10" height="12" style="fill:var(--pillar-side)"/></svg></span><span>Pink pillars are too tall to jump. <b>Steer around them.</b></span></li>
         <li><span class="glyph"><svg viewBox="0 0 26 26"><rect x="3" y="6" width="20" height="6" style="fill:var(--wall)"/><rect x="3" y="12" width="20" height="7" style="fill:var(--wall-side)"/><rect x="9" y="6" width="1.5" height="6" style="fill:var(--wall-side)"/><rect x="16" y="6" width="1.5" height="6" style="fill:var(--wall-side)"/></svg></span><span>Walls can’t be jumped by any snake.</span></li>
         <li><span class="glyph"><svg viewBox="0 0 26 26"><path d="M13 3l6 10-6 10-6-10z" style="fill:var(--gem)"/></svg></span><span>Gems make you longer. Don’t run into your tail, but you can jump it.</span></li>
         <li><span class="glyph"><svg viewBox="0 0 26 26"><rect x="3" y="10" width="20" height="6" rx="3" style="fill:rgba(246,239,253,.15)"/><rect x="3" y="10" width="13" height="6" rx="3" style="fill:var(--gem)"/></svg></span><span>Eat the level’s gem goal to <b>clear it</b> and unlock the next level.</span></li>
@@ -341,7 +383,7 @@ button{touch-action:manipulation;font:inherit}
       <div class="stat"><div class="v" id="stGems">0</div><div class="k">Gems</div></div>
     </div>
     <div class="entry" id="entry" hidden>
-      <div><div class="eyebrow" id="entryRank" style="color:var(--ribbon)">You made the board</div>
+      <div><div class="eyebrow" id="entryRank">You made the board</div>
       <div class="desc" id="entryHint" style="margin-top:4px">Type your name here or on your phone.</div></div>
       <div class="row"><input class="name-in" id="nameIn" maxlength="12" autocomplete="off" spellcheck="false" aria-label="Your name"><button class="btn" id="nameBtn">Save</button></div>
     </div>
@@ -402,7 +444,7 @@ const css = getComputedStyle(document.documentElement);
 const tok = k => css.getPropertyValue('--' + k).trim();
 const C = {};
 ['night','hurdle','hurdle-side','pillar','pillar-side','gem','ink'].forEach(k => C[k] = tok(k));
-const rgb = h => { h = h.replace('#',''); return [0,2,4].map(i => parseInt(h.slice(i,i+2),16)); };
+const rgb = h => { h = h.replace('#',''); if (h.length === 3) h = h.replace(/./g, c => c + c); return [0,2,4].map(i => parseInt(h.slice(i,i+2),16)); };
 const mix = (a,b,t) => 'rgb(' + a.map((v,i) => Math.round(v + (b[i]-v)*t)).join(',') + ')';
 const mf = m => 440*Math.pow(2, (m - 69)/12);
 
@@ -451,22 +493,27 @@ function gauntlet(){
   }
   return w;
 }
+// Every level is black ground ruled with a holographic grid; each level sweeps the rainbow at its own angle.
+// Walls are black blocks with thin white edges. Pillars, hurdles and gems keep one color everywhere.
+const HOLO = ['#5ff0ff', '#8a7bff', '#ff4fd8', '#ffe94d', '#7dff5a'];
+function holoFill(g, x0, y0, w, h, deg){
+  const a = deg*Math.PI/180, cx = x0 + w/2, cy = y0 + h/2, r = Math.hypot(w, h)/2;
+  const gr = g.createLinearGradient(cx - Math.cos(a)*r, cy - Math.sin(a)*r, cx + Math.cos(a)*r, cy + Math.sin(a)*r);
+  HOLO.forEach((c, i) => gr.addColorStop(i/(HOLO.length - 1), c));
+  return gr;
+}
+const lv = (line, deg) => ({tiles: ['#000000', '#000000'], void: '#000000', line, deg, wall: ['#141218', '#000000']});
 const STAGES = [
-  {name: 'Open Floor', goal: 12, half: 18, music: 'lofi',
-   tiles: ['#211736', '#271c42'], void: '#110b20', wall: ['#7563ad', '#3d3068'], walls: []},
-  {name: 'Four Pillars', goal: 16, half: 20, music: 'synthwave',
-   tiles: ['#141a3a', '#192148'], void: '#090c20', wall: ['#5d72d6', '#2c3778'],
+  {name: 'Open Floor', goal: 12, half: 18, music: 'lofi', ...lv('#ffffff', 20), walls: []},
+  {name: 'Four Pillars', goal: 16, half: 20, music: 'synthwave', ...lv('#ffffff', 135),
    walls: [block(-12, -12, 3, 3), block(9, -12, 3, 3), block(-12, 9, 3, 3), block(9, 9, 3, 3)]},
-  {name: 'Corridors', goal: 20, half: 21, music: 'chiptune',
-   tiles: ['#122822', '#17312a'], void: '#071410', wall: ['#b9a44c', '#5e5220'],
+  {name: 'Corridors', goal: 20, half: 21, music: 'chiptune', ...lv('#ffffff', 90),
    walls: [block(-17, -8, 14, 1), block(3, -8, 14, 1), block(-17, 8, 14, 1), block(3, 8, 14, 1), block(-1, -17, 2, 5), block(-1, 13, 2, 5)]},
-  {name: 'Rooms', goal: 24, half: 22, music: 'dnb',
-   tiles: ['#2b1517', '#341a1c'], void: '#14090a', wall: ['#d06a45', '#6e2c18'],
+  {name: 'Rooms', goal: 24, half: 22, music: 'dnb', ...lv('#ffffff', 200),
    walls: [block(-10, -22, 1, 19), block(-10, 4, 1, 18), block(12, -22, 1, 19), block(12, 4, 1, 18),
            block(-22, -10, 5, 1), block(-13, -10, 12, 1), block(3, -10, 13, 1), block(20, -10, 2, 1),
            block(-22, 11, 5, 1), block(-13, 11, 12, 1), block(3, 11, 13, 1), block(20, 11, 2, 1)]},
-  {name: 'Gauntlet', goal: 30, half: 22, music: 'techno',
-   tiles: ['#0e2230', '#122a3b'], void: '#050e15', wall: ['#8fa3b8', '#3f4e60'], walls: gauntlet()}
+  {name: 'Gauntlet', goal: 30, half: 22, music: 'techno', ...lv('#ffffff', 315), walls: gauntlet()}
 ];
 
 // ---- saved progress ----
@@ -534,7 +581,7 @@ const GLOW_GEM = makeGlow(C.gem);
 let RIB = [], RIB_RGB = [255,255,255], GLOW_RIB = null;
 const ribA = a => `rgba(${RIB_RGB.join(',')},${a})`;
 function applyLook(S){
-  C['tile-a'] = S.tiles[0]; C['tile-b'] = S.tiles[1]; C.void = S.void; C.wall = S.wall[0]; C['wall-side'] = S.wall[1];
+  C['tile-a'] = S.tiles[0]; C['tile-b'] = S.tiles[1]; C.void = S.void; C.wall = S.wall[0]; C['wall-side'] = S.wall[1]; C.line = S.line; C.deg = S.deg;
 }
 
 // haptics go to the phone of whichever snake the event happened to (in solo, to every phone)
@@ -583,7 +630,7 @@ function lookFor(S, color, side){
   return {color, side, ribRGB: c, glow: makeGlow(color), rib: Array.from({length: 20}, (_, i) => mix(base, c, 0.42 + 0.58*(i/19)))};
 }
 // player 2 gets its own color so the two snakes never look alike
-const P2_COLORS = K => K === SNAKES.magnet ? ['#ffb547', '#c56f1c'] : ['#d6f25c', '#7f9a22'];
+const P2_COLORS = K => K === SNAKES.glider ? ['#ffe94d', '#a8960f'] : ['#9a8cff', '#4b3fa8'];
 function newPlayer(i, y, look){
   return {i, look, x: 0.5, y, th: 0, turn: 0, prevTurn: 0, turnCue: 0, aim: null, sinceP: 0,
     trail: [{x: -6.5, y, air: false}], air: false, airT: 0, airDur: 1, jumpBuf: 0, tailLen: 7, dist: 0, gems: 0,
@@ -1389,6 +1436,12 @@ function render(clock){
   const vy0 = Math.floor(RCAM.y - hh) - 1, vy1 = Math.ceil(RCAM.y + hh) + 3;
 
   const inset = Math.max(1, S*0.04);
+  {
+    // the floor's grid: fill the arena with a dimmed line color; the black tiles drawn over it leave the lines
+    const [ax, ay] = w2s(ARENA.x0, ARENA.y0);
+    const aw = (ARENA.x1 - ARENA.x0)*S, ah = (ARENA.y1 - ARENA.y0)*S;
+    ctx.globalAlpha = 0.6; ctx.fillStyle = holoFill(ctx, ax, ay, aw, ah, C.deg); ctx.fillRect(ax, ay, aw, ah); ctx.globalAlpha = 1;
+  }
   for (let gy = Math.max(vy0, ARENA.y0); gy <= Math.min(vy1, ARENA.y1 - 1); gy++)
   for (let gx = Math.max(vx0, ARENA.x0); gx <= Math.min(vx1, ARENA.x1 - 1); gx++){
     ctx.fillStyle = (gx + gy) & 1 ? C['tile-a'] : C['tile-b'];
@@ -1478,7 +1531,7 @@ function makeR3(){
 
   const col = c => new THREE.Color(c);
   const gray = k => new THREE.Color(k, k, k);   // a multiplier in linear space, used to shade instance colors
-  const BOX = new THREE.BoxGeometry(1, 1, 1);
+  const BOX = new THREE.BoxGeometry(1, 1, 1), EDGES = new THREE.EdgesGeometry(BOX);
   const level = new THREE.Group(); scene.add(level);
   const m4 = new THREE.Matrix4(), q0 = new THREE.Quaternion(), v3 = new THREE.Vector3(), s3 = new THREE.Vector3(), tmpC = new THREE.Color();
   const UP = new THREE.Vector3(0, 1, 0), qr = new THREE.Quaternion();
@@ -1625,7 +1678,7 @@ function makeR3(){
 
   // level: floor, walls and obstacles are fixed once a level loads, so build them once
   function build(){
-    level.traverse(o => { if (o.isMesh){ if (o.geometry !== BOX) o.geometry.dispose(); [].concat(o.material).forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); } });
+    level.traverse(o => { if (o.isMesh || o.isLine){ if (o.geometry !== BOX && o.geometry !== EDGES) o.geometry.dispose(); [].concat(o.material).forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); } });
     level.clear();
     for (const [g, o] of gemObjs) dropGem(g, o);
     scene.background = col(C.void); scene.fog.color = col(C.void);
@@ -1633,21 +1686,25 @@ function makeR3(){
     const w = ARENA.x1 - ARENA.x0, h = ARENA.y1 - ARENA.y0, px = 32;
     const fc = document.createElement('canvas'); fc.width = w*px; fc.height = h*px;
     const fg = fc.getContext('2d');
-    fg.fillStyle = C.void; fg.fillRect(0, 0, fc.width, fc.height);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
-      fg.fillStyle = (x + ARENA.x0 + y + ARENA.y0) & 1 ? C['tile-a'] : C['tile-b'];
-      fg.fillRect(x*px + 1, y*px + 1, px - 2, px - 2);
-    }
+    // the floor is a perspective grid: lines in the level color (a little dimmed) between black tiles
+    fg.fillStyle = holoFill(fg, 0, 0, fc.width, fc.height, C.deg); fg.globalAlpha = 0.8; fg.fillRect(0, 0, fc.width, fc.height); fg.globalAlpha = 1;
+    fg.fillStyle = '#000';
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) fg.fillRect(x*px + 1.5, y*px + 1.5, px - 3, px - 3);
     const tex = new THREE.CanvasTexture(fc);
     tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({map: tex}));
     floor.rotation.x = -Math.PI/2; floor.position.set((ARENA.x0 + ARENA.x1)/2, 0, (ARENA.y0 + ARENA.y1)/2);
     level.add(floor);
 
-    const mats = {wall: boxMats(C.wall, C['wall-side']), tall: boxMats(C.pillar, C['pillar-side']), low: boxMats(C.hurdle, C['hurdle-side'])};
-    const addBox = (o, hc, m) => { const b = new THREE.Mesh(BOX, m); b.scale.set(o.w, hc, o.h); b.position.set(o.x + o.w/2, hc/2, o.y + o.h/2); level.add(b); };
-    for (const o of WALLS) addBox(o, WALL_H, mats.wall);
-    for (const o of G.walls) addBox(o, WALL_H, mats.wall);
+    const mats = {wall: boxMats('#050505', '#000'), tall: boxMats(C.pillar, C['pillar-side']), low: boxMats(C.hurdle, C['hurdle-side'])};
+    const edgeMat = new THREE.LineBasicMaterial({color: 0xffffff, transparent: true, opacity: 0.85});
+    const addBox = (o, hc, m, edged) => {
+      const b = new THREE.Mesh(BOX, m); b.scale.set(o.w, hc, o.h); b.position.set(o.x + o.w/2, hc/2, o.y + o.h/2);
+      if (edged) b.add(new THREE.LineSegments(EDGES, edgeMat));
+      level.add(b);
+    };
+    for (const o of WALLS) addBox(o, WALL_H, mats.wall, true);
+    for (const o of G.walls) addBox(o, WALL_H, mats.wall, true);
     for (const c of G.chunks.values()) for (const o of c.obs) addBox(o, o.tall ? TALL_H : LOW_H, o.tall ? mats.tall : mats.low);
 
     GFX.forEach(dropGfx);
@@ -2014,7 +2071,7 @@ function showDuel(){
   $('duelEyebrow').textContent = timeUp ? "Time's up" : 'Both snakes are out of lives';
   $('duelTitle').textContent = w < 0 ? "It's a tie" : OPP === 'cpu' && MODE === 2 ? (w === 0 ? 'You win' : 'The computer wins') : `Player ${w + 1} wins`;
   $('duelTitle').style.color = w < 0 ? '' : PL[w].look.color;
-  $('duelTitle').style.textShadow = w < 0 ? '' : `5px 5px 0 ${PL[w].look.side}`;
+  $('duelTitle').style.textShadow = '';
   PL.forEach((p, i) => {
     const el = $('vs' + i);
     el.querySelector('.v').textContent = sc[i];
