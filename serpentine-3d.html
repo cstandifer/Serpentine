@@ -35,6 +35,7 @@ body{margin:0;font-size:14px}
   --yellow:#ffe94d;
   --lime:#7dff5a;
   --holo:linear-gradient(110deg,#5ff0ff 0%,#8a7bff 26%,#ff4fd8 50%,#ffe94d 75%,#7dff5a 100%);
+  --btn:linear-gradient(120deg,#8a7bff,#ff4fd8);
   --muted:#9893ad;
   --rule:rgba(255,255,255,.4);
   --rule-soft:rgba(255,255,255,.16);
@@ -221,16 +222,16 @@ button{touch-action:manipulation;font:inherit}
 .card{border:1.5px solid transparent;border-image:var(--holo) 1}
 .pick{border-top:1px solid var(--rule-soft)}
 .pick > .eyebrow::before{color:var(--pink)}
-.opt input:checked + span{background:var(--holo);border-color:transparent}
-.btn{background:var(--holo)}
+.opt input:checked + span{background:var(--btn);border-color:transparent}
+.btn{background:var(--btn)}
 .btn::after{background:#000}
 .btn:active{background:var(--cream)}
 .btn-ghost{background:transparent}
 .btn-ghost:active{background:var(--cream)}
-.goal-bar i{background:var(--holo)}
+.goal-bar i{background:var(--btn)}
 .board{border-top:0;background:var(--holo) top/100% 1.5px no-repeat;padding-top:1.5px}
 .board li:first-child .r{background:var(--holo);-webkit-background-clip:text;background-clip:text;color:transparent}
-.board li.me{background:var(--holo)}
+.board li.me{background:var(--btn)}
 .split{background:linear-gradient(180deg,#5ff0ff,#8a7bff,#ff4fd8,#ffe94d,#7dff5a);border:0;width:3px}
 .duo-t.hurry{background:var(--pink);border-color:var(--pink)}
 .lives .on,.duo-p .hearts .on{fill:var(--pink)}

@@ -18,6 +18,7 @@
 :root{
   --cream:#f6f4ff; --line:rgba(255,255,255,.88); --lime:#7dff5a; --pink:#ff4fd8; --cyan:#5ff0ff; --muted:#9893ad;
   --holo:linear-gradient(110deg,#5ff0ff 0%,#8a7bff 26%,#ff4fd8 50%,#ffe94d 75%,#7dff5a 100%);
+  --btn:linear-gradient(120deg,#8a7bff,#ff4fd8);
   --rule:rgba(255,255,255,.4); --rule-soft:rgba(255,255,255,.16);
   --wide:"Archivo","Arial Black",sans-serif;
   --mono:"Azeret Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -107,7 +108,7 @@ input[type=range]{width:100%;accent-color:var(--line)}
 
 /* the holographic pieces */
 .brand,.title,.status .score,.code-in{background:var(--holo);-webkit-background-clip:text;background-clip:text;color:transparent}
-.btn,.pad button.jump{background:var(--holo);border-color:transparent}
+.btn,.pad button.jump{background:var(--btn);border-color:transparent}
 .btn:active{background:var(--cream)}
 .btn-ghost{background:transparent;border-color:var(--line)}
 .btn-ghost:active{background:var(--cream);color:#000}
