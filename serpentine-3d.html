@@ -546,17 +546,14 @@ let ARENA = null, WALLS = [];
 let W = 0, H = 0, DPR = 1, SCALE = 40;
 function resize(){
   DPR = Math.min(2, window.devicePixelRatio || 1);
-  if (MODE === 2){
-    // versus: the shared 3D board fills the screen; no 2D minimap
-    cvs.hidden = true; $('world').hidden = false; $('vig').hidden = false; $('split').hidden = true;
-    if (R3) R3.resize();
-    return;
-  }
-  cvs.hidden = false;
   const mini = view !== 'top';
-  cvs.classList.toggle('mini', mini); cvs.classList.toggle('duo', false);
-  if (mini){
-    // in the 3D views this canvas is a small top-down map in the corner
+  cvs.classList.toggle('duo', mini && MODE === 2);
+  if (mini && MODE === 2 && ARENA){
+    // versus: one map of the whole arena, centered between the two views
+    W = H = Math.round(Math.max(150, Math.min(240, Math.min(innerWidth, innerHeight)*0.3)));
+    SCALE = W/(ARENA.x1 - ARENA.x0 + 3);
+  } else if (mini){
+    // in the 3D views this canvas becomes a small top-down map in the corner
     W = H = Math.round(Math.max(140, Math.min(260, Math.min(innerWidth, innerHeight)*0.28)));
     SCALE = W/15;
   } else {
@@ -565,6 +562,7 @@ function resize(){
     SCALE = Math.max(24, Math.min(58, W < H ? W/13 : H/12));
   }
   cvs.width = Math.round(W*DPR); cvs.height = Math.round(H*DPR);
+  cvs.classList.toggle('mini', mini);
   cvs.style.width = mini ? W + 'px' : ''; cvs.style.height = mini ? H + 'px' : '';
   if (R3) R3.resize();
 }
@@ -1529,7 +1527,6 @@ function makeR3(){
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x000000, 7, 36);
-  const boardCam = new THREE.PerspectiveCamera(40, 1, 0.5, 600);   // versus: one bird's-eye view of the whole arena
   scene.add(new THREE.AmbientLight(0xffffff, 1.3));
   const sun = new THREE.DirectionalLight(0xffffff, 1.7); sun.position.set(4, 10, 3); scene.add(sun);
 
@@ -1781,29 +1778,11 @@ function makeR3(){
     });
     load(PL[0]);
 
-    // draw
-    if (MODE === 2){
-      // versus: one shared bird's-eye camera frames the whole board; both snakes stay in view
-      for (const g of GFX){ g.head.visible = g.headShow; g.shadow.visible = g.headShow; }
-      const cx = (ARENA.x0 + ARENA.x1)/2, cz = (ARENA.y0 + ARENA.y1)/2;
-      const R = Math.max(ARENA.x1 - ARENA.x0, ARENA.y1 - ARENA.y0)/2 + 3;   // fit the whole arena, with a margin
-      boardCam.aspect = innerWidth/innerHeight;
-      const halfV = boardCam.fov*Math.PI/360, halfH = Math.atan(Math.tan(halfV)*boardCam.aspect);
-      const dist = R/Math.sin(Math.min(halfV, halfH));
-      const tilt = 0.5, sh2 = sh*0.3;   // ~29 deg off straight-down, with a touch of crash shake
-      boardCam.position.set(cx + (Math.random()-.5)*sh2, dist*Math.cos(tilt), cz + dist*Math.sin(tilt) + (Math.random()-.5)*sh2);
-      boardCam.far = dist + R + 80; boardCam.lookAt(cx, 0, cz); boardCam.updateProjectionMatrix();
-      scene.fog.near = 400; scene.fog.far = 600;   // the board is fully lit; only empty space beyond fades
-      renderer.setScissorTest(false);
-      renderer.setViewport(0, 0, innerWidth, innerHeight); renderer.setScissor(0, 0, innerWidth, innerHeight);
-      renderer.render(scene, boardCam);
-      return;
-    }
-    scene.fog.near = 7; scene.fog.far = 36;
-    // solo: the one snake's camera fills the screen
+    // draw: full screen in solo; in versus each player gets half the screen and their own camera
     const W3 = innerWidth, H3 = innerHeight, n = GFX.length, vw = W3/n;
     renderer.setScissorTest(n > 1);
     for (let i = 0; i < n; i++){
+      // you never see your own head in eye view, but you do see your rival's
       GFX.forEach((o, j) => { o.head.visible = o.headShow && !(view === 'eye' && j === i); o.shadow.visible = o.headShow; });
       const cam = GFX[i].camera;
       cam.aspect = vw/H3; cam.updateProjectionMatrix();
@@ -1942,7 +1921,7 @@ const HEART = 'M8 14s-6-3.6-6-7.6A3.2 3.2 0 0 1 8 4.3a3.2 3.2 0 0 1 6 2.1C14 10.
 const heartsHTML = n => Array.from({length: LIVES}, (_, i) => `<svg viewBox="0 0 16 16"><path class="${i < n ? 'on' : 'off'}" d="${HEART}"/></svg>`).join('');
 // show the solo HUD or the versus one (two scoreboards, a clock and a divider)
 function applyModeUI(){
-  $('duo').hidden = MODE !== 2; $('split').hidden = true;
+  $('duo').hidden = MODE !== 2; $('split').hidden = MODE !== 2 || view === 'top';
   $('hudMain').hidden = MODE === 2;
   lastHud = '';
 }
@@ -2003,9 +1982,8 @@ function setMode(m){
   MODE = m; store.set('players', m);
   // solo keeps its unlock order; versus can race on any level
   if (MODE === 1 && stage >= unlocked){ stage = unlocked - 1; store.set('stage', stage); }
-  applyModeUI(); setPhoneUI();
-  if (MODE === 1) setView(view); else { $('world').hidden = false; $('vig').hidden = false; }
-  refreshMenu(); resize();
+  if (MODE === 2 && view === 'top') setView('chase');
+  applyModeUI(); setPhoneUI(); refreshMenu(); resize();
 }
 buildSeg('oppPick', 'opp', [{value: 'friend', html: '<b>Friend</b><small>2 phones</small>'}, {value: 'cpu', html: '<b>Computer</b><small>Solo vs AI</small>'}], v => {
   OPP = v; store.set('opp', v); setPhoneUI(); applyModeUI(); refreshMenu();
@@ -2034,7 +2012,7 @@ function setView(v){
   else if (MODE === 2 && v === 'top') v = 'chase';   // versus needs the split 3D views
   view = v; store.set('view', v);
   $('world').hidden = $('vig').hidden = v === 'top';
-  $('split').hidden = true;
+  $('split').hidden = MODE !== 2 || v === 'top';
   pointers.clear();
   resize();
   $('view-' + v).checked = true;
@@ -2042,8 +2020,7 @@ function setView(v){
   syncPhone();
 }
 function cycleView(){
-  if (MODE === 2) return;   // versus is one fixed board
-  const ks = Object.keys(VIEWS).filter(k => R3 || k === 'top');
+  const ks = Object.keys(VIEWS).filter(k => (R3 || k === 'top') && !(MODE === 2 && k === 'top'));
   setView(ks[(ks.indexOf(view) + 1) % ks.length]);
 }
 function updateMenuUI(){
@@ -2060,10 +2037,8 @@ function updateMenuUI(){
   $('modeDesc').innerHTML = MODE === 2
     ? '<b>Versus.</b> Two snakes, one arena, 60 seconds. Race for the same gems. Crash into anything, including each other, and you lose a life and respawn. Highest score wins. No second player? Pick the computer.'
     : '<b>Solo.</b> Clear each level’s gem goal to unlock the next.';
-  // the camera choice is a solo thing; versus is one shared board
-  $('viewLabel').closest('.pick').hidden = MODE === 2;
   for (const k in VIEWS){
-    const inp = $('view-' + k), off = !R3 && k !== 'top';
+    const inp = $('view-' + k), off = (!R3 && k !== 'top') || (MODE === 2 && k === 'top');
     inp.disabled = off; inp.closest('.opt').classList.toggle('locked', off);
   }
   $('view-' + view).checked = true;
@@ -2366,8 +2341,8 @@ function frame(now){
   for (const p of PL) p.flash = Math.max(0, p.flash - dt*2.5);
   G.flash = PL[0].flash;
   schedule();
-  if (MODE === 2){ R3.render(now/1000, dt); }
-  else { render(now/1000); if (R3 && view !== 'top') R3.render(now/1000, dt); }
+  render(now/1000);
+  if (R3 && view !== 'top') R3.render(now/1000, dt);
   updateHUD();
   updateWait();
   syncPhone();
