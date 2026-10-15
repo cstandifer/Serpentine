@@ -3,6 +3,7 @@
 <img width="322" height="514" alt="IMG_2604" src="https://github.com/user-attachments/assets/ca39763f-ad97-4016-965d-121ea832f5fc" />
 
 A rhythm snake game that mixes *Dancing Line* with *Snake*. It's one HTML file with no build step and no dependencies beyond Google Fonts.
+Start playing： https://serpentine-4cws.onrender.com/
 
 ## How to play
 
